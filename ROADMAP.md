@@ -17,7 +17,7 @@ el backend que la sustenta esté verificado.
 
 ```
 Etapa 1 — Publicar    █████████████  ✅ CERRADA — primera corrida real: ID 109
-Etapa 2 — Dashboard   ░░░░░░░░░░░░░  no iniciada
+Etapa 2 — Dashboard   ██░░░░░░░░░░░  🔄 EN CURSO
 Etapa 3 — Editor      ░░░░░░░░░░░░░  no iniciada
 Etapa 4 — IA          ░░░░░░░░░░░░░  no iniciada
 ```

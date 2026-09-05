@@ -23,10 +23,9 @@
  *   y se puede proceder con la publicación.
  */
 
-import { chromium } from 'playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadEnv, getPassword, login, BASE_URL, DEFAULT_ENV_PATH } from './lib/spip-session.mjs';
+import { withSpipSession, BASE_URL, DEFAULT_ENV_PATH } from './lib/spip-session.mjs';
 import { SLUG_TO_RUBRIQUE_ID } from './lib/spip-client.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,39 +34,23 @@ const EDIT_URL = `${BASE_URL}/ecrire/?exec=article_edit&new=oui`;
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const env = loadEnv(DEFAULT_ENV_PATH);
-  const password = getPassword(env);
-
-  if (!password) {
-    console.error(`❌ No se encontró KILOMBOTOP_PASSWORD en .env`);
-    process.exit(1);
-  }
-
   console.log('\nProbe D0 — verificando rubriques en www.kilombo.top');
   console.log('─'.repeat(55));
 
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  const page = await browser.newPage();
-
-  let liveOptions;
-
-  try {
-    await login(page, {
-      password,
+  const liveOptions = await withSpipSession(
+    (page) =>
+      page.$$eval('select[name="id_parent"] option', (opts) =>
+        opts.map((o) => ({
+          id:    o.value.trim(),
+          label: o.textContent.replace(/\s+/g, ' ').trim(),
+        }))
+      ),
+    {
+      envPath: DEFAULT_ENV_PATH,
       targetUrl: EDIT_URL,
       expectedUrlIncludes: 'exec=article_edit',
-    });
-
-    // Extraer todas las opciones del <select name="id_parent">
-    liveOptions = await page.$$eval('select[name="id_parent"] option', (opts) =>
-      opts.map((o) => ({
-        id:    o.value.trim(),
-        label: o.textContent.replace(/\s+/g, ' ').trim(),
-      }))
-    );
-  } finally {
-    await browser.close();
-  }
+    }
+  );
 
   // ── Todas las secciones disponibles en el sitio ──────────────────────────
   console.log(`\n${'ID'.padEnd(6)} Nombre en SPIP`);

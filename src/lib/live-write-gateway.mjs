@@ -110,3 +110,42 @@ export async function guardedWrite(req) {
     throw err;
   }
 }
+
+/**
+ * Busca en el audit log la entrada más reciente exitosa para una acción
+ * y un targetId dados. Usado como ledger secundario para recuperar marcadores
+ * de idempotencia cuando el write-back al JSON falló.
+ *
+ * @param {string} action   - acción a buscar, e.g. `'article.create'`
+ * @param {string} targetId - valor de `target.id` a buscar
+ * @returns {{ articleId: string, publishedAt: string, url: string } | null}
+ */
+export function findSuccessEntry(action, targetId) {
+  if (!fs.existsSync(AUDIT_LOG_PATH)) return null;
+
+  let lastMatch = null;
+  const lines = fs.readFileSync(AUDIT_LOG_PATH, 'utf8').split('\n');
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line);
+      if (
+        entry.action === action &&
+        entry.result === 'success' &&
+        entry.target?.id === targetId &&
+        entry.articleId
+      ) {
+        lastMatch = {
+          articleId:   entry.articleId,
+          publishedAt: entry.timestamp,
+          url: `https://www.kilombo.top/ecrire/?exec=article&id_article=${entry.articleId}`,
+        };
+      }
+    } catch {
+      // línea malformada — ignorar
+    }
+  }
+
+  return lastMatch;
+}

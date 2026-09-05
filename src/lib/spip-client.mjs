@@ -23,11 +23,10 @@
  *   - Asociación de autor — formulario separado en SPIP
  */
 
-import { chromium } from 'playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { guardedWrite } from './live-write-gateway.mjs';
-import { loadEnv, getPassword, login, BASE_URL, DEFAULT_ENV_PATH } from './spip-session.mjs';
+import { withSpipSession, BASE_URL, DEFAULT_ENV_PATH } from './spip-session.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -125,6 +124,21 @@ async function fillField(page, field, value, dryRun, optional = false) {
   }
 }
 
+const REQUIRED_FIELDS = [
+  { key: 'title', field: SELECTORS.title, log: (v) => `  Título: "${v}"` },
+  { key: 'contentHtml', field: SELECTORS.body, log: () => '  Cuerpo (contentHtml)...' },
+];
+
+const CONDITIONAL_FIELDS = [
+  { key: 'descriptif', field: SELECTORS.descriptif, optionalSelector: false, log: () => '  Descriptif...' },
+  { key: 'sourceSite', field: SELECTORS.sourceSite, optionalSelector: false, log: (v) => `  Fuente (nom_site): "${v}"` },
+  { key: 'sourceUrl', field: SELECTORS.sourceUrl, optionalSelector: false, log: (v) => `  URL fuente (url_site): "${v}"` },
+  { key: 'surtitre', field: SELECTORS.surtitre, optionalSelector: true, log: (v) => `  Surtitre: "${v}"` },
+  { key: 'soustitre', field: SELECTORS.soustitre, optionalSelector: true, log: (v) => `  Soustitre: "${v}"` },
+  { key: 'chapo', field: SELECTORS.chapo, optionalSelector: true, log: () => '  Chapo (entradilla)...' },
+  { key: 'ps', field: SELECTORS.ps, optionalSelector: true, log: () => '  Post-scriptum...' },
+];
+
 /**
  * Operación real de relleno y envío del formulario.
  * Solo debe invocarse dentro del callback execute() de guardedWrite().
@@ -150,50 +164,19 @@ async function performCreate(page, article, dryRun) {
     });
   }
 
-  // ── Campos confirmados como visibles ──────────────────────────────────────
-  console.log(`  Título: "${article.title}"`);
-  await fillField(page, SELECTORS.title, article.title, dryRun);
-
-  console.log('  Cuerpo (contentHtml)...');
-  await fillField(page, SELECTORS.body, article.contentHtml, dryRun);
+  for (const { key, field, log } of REQUIRED_FIELDS) {
+    console.log(log(article[key]));
+    await fillField(page, field, article[key], dryRun);
+  }
 
   console.log(`  Sección: ${article.section} → rubrique ${rubriquId}`);
   await fillField(page, SELECTORS.section, rubriquId, dryRun);
 
-  if (article.descriptif) {
-    console.log('  Descriptif...');
-    await fillField(page, SELECTORS.descriptif, article.descriptif, dryRun);
-  }
-
-  if (article.sourceSite) {
-    console.log(`  Fuente (nom_site): "${article.sourceSite}"`);
-    await fillField(page, SELECTORS.sourceSite, article.sourceSite, dryRun);
-  }
-
-  if (article.sourceUrl) {
-    console.log(`  URL fuente (url_site): "${article.sourceUrl}"`);
-    await fillField(page, SELECTORS.sourceUrl, article.sourceUrl, dryRun);
-  }
-
-  // ── Campos opcionales que pueden estar en modo WYSIWYG ────────────────────
-  if (article.surtitre) {
-    console.log(`  Surtitre: "${article.surtitre}"`);
-    await fillField(page, SELECTORS.surtitre, article.surtitre, dryRun, true);
-  }
-
-  if (article.soustitre) {
-    console.log(`  Soustitre: "${article.soustitre}"`);
-    await fillField(page, SELECTORS.soustitre, article.soustitre, dryRun, true);
-  }
-
-  if (article.chapo) {
-    console.log('  Chapo (entradilla)...');
-    await fillField(page, SELECTORS.chapo, article.chapo, dryRun, true);
-  }
-
-  if (article.ps) {
-    console.log('  Post-scriptum...');
-    await fillField(page, SELECTORS.ps, article.ps, dryRun, true);
+  for (const { key, field, optionalSelector, log } of CONDITIONAL_FIELDS) {
+    const value = article[key];
+    if (!value) continue;
+    console.log(log(value));
+    await fillField(page, field, value, dryRun, optionalSelector);
   }
 
   // ── Guardar ───────────────────────────────────────────────────────────────
@@ -271,37 +254,22 @@ export class SPIPClient {
    * @returns {Promise<{ success: boolean, articleId?: string, url?: string, error?: string }>}
    */
   async publishArticle(article, { dryRun = false } = {}) {
-    const env = loadEnv(this.envPath);
-    const password = getPassword(env);
-
-    if (!password) {
-      throw new Error(
-        `No se encontró contraseña en ${this.envPath}. ` +
-          `Verificar que KILOMBOTOP_PASSWORD está definido.`
-      );
-    }
-
-    const browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox'],
-      timeout: this.timeout,
-    });
-
-    const page = await browser.newPage();
-
     try {
-      await login(page, {
-        password,
-        targetUrl: EDIT_URL,
-        expectedUrlIncludes: 'exec=article_edit',
-      });
-
-      const result = await guardedWrite({
-        action: 'article.create',
-        target: { id: article.id, title: article.title, section: article.section },
-        dryRun,
-        execute: () => performCreate(page, article, dryRun),
-      });
+      const result = await withSpipSession(
+        (page) =>
+          guardedWrite({
+            action: 'article.create',
+            target: { id: article.id, title: article.title, section: article.section },
+            dryRun,
+            execute: () => performCreate(page, article, dryRun),
+          }),
+        {
+          envPath: this.envPath,
+          timeout: this.timeout,
+          targetUrl: EDIT_URL,
+          expectedUrlIncludes: 'exec=article_edit',
+        }
+      );
 
       return {
         success: true,
@@ -317,8 +285,6 @@ export class SPIPClient {
         error: err.message,
         dryRun,
       };
-    } finally {
-      await browser.close();
     }
   }
 }

@@ -4,12 +4,16 @@
   "description": "Publica artículos completos en www.kilombo.top (SPIP 4.4), dejándolos en estado 'en preparación' para revisión humana.",
   "type": "module",
   "scripts": {
+    "start": "node src/server.mjs",
+    "dashboard": "node src/server.mjs",
     "publish": "node src/publish-article.mjs",
     "validate": "node src/publish-article.mjs --validate-only",
     "validate:example": "node src/publish-article.mjs articles/example-article.json --validate-only",
-    "probe": "node src/probe-rubriques.mjs"
+    "probe": "node src/probe-rubriques.mjs",
+    "test": "node --test"
   },
   "dependencies": {
+    "express": "^4.19.2",
     "playwright": "1.47.2"
   },
   "engines": {

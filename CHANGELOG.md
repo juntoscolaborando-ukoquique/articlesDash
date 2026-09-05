@@ -5,6 +5,158 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.3.3] — 2026-09-05
+
+Refactors de calidad de código y documentación de deuda técnica.
+
+### Cambiado
+
+- `src/lib/articles-store.mjs` — extraído helper privado `atomicWrite(filepath, article, fields)`.
+  `writeBack()` y `writeBackToFile()` duplicaban verbatim la secuencia
+  "leer → fusionar campos → escribir temp → rename atómico". Ahora ambas
+  delegan en el helper compartido. Sin cambio de comportamiento observable.
+
+### Documentado
+
+- `ROADMAP.md` — nueva sección "Deuda técnica conocida" con entrada para el
+  HTML checker basado en regex de `article-validator.mjs`. Explica por qué es
+  aceptable con el contenido curado actual, cuáles son sus límites conocidos
+  (`>` en `attrsStr` como rama muerta, sin detección de HTML malformado), los
+  paquetes candidatos a reemplazo (`node-html-parser`, `parse5`), y cuándo
+  conviene resolverlo (antes de la Etapa 3 — editor libre).
+
+---
+
+## [1.3.2] — 2026-09-05
+
+Aplicado `articulos-READY-updated.tar.gz`.
+
+### Añadido
+
+- `src/lib/text-to-html.mjs` — utilidad pura de conversión entre texto plano
+  y el HTML restringido que exige `contentHtml` (solo `<p>` y `<br>`, sin
+  atributos, sin tags prohibidos). Escapa `<`, `>` y `&` automáticamente.
+  Exporta `textToParagraphHtml(text)` y `htmlParagraphsToText(html)`.
+  Sin dependencias externas; pensado para ser usado desde el editor de la
+  Etapa 3.
+
+- `test/article-validator.test.mjs` — suite completa de tests para
+  `article-validator.mjs`. Cubre: artículo mínimo y completo válido,
+  `_schema_version`, `id`, `language`, `section`, `title`, `surtitre` /
+  `soustitre`, `descriptif`, `coverImage`, HTML permitido / prohibido,
+  `chapo` / `ps`, `sourceSite` / `sourceUrl` / `sourceDate`, `date`,
+  `topics`, `status` y mensajes de error de `assertValidArticle`.
+
+- `test/text-to-html.test.mjs` — suite de tests para `text-to-html.mjs`.
+  Cubre: texto vacío, párrafo único, separación por líneas en blanco, `<br>`
+  en saltos simples, escape de caracteres HTML accidentales, normalización
+  de `\r\n`, y round-trip `textToParagraphHtml` → `htmlParagraphsToText`.
+
+- `docs/ARTICLE-DESIGN.md` — documento de diseño sobre los campos del
+  formulario SPIP: qué responde a `fill()`, qué necesita `waitForSelector()`
+  (campos AJAX), qué está fuera del alcance del pipeline (tema Escal,
+  mots-clés, logo).
+
+### Verificado
+
+- `npm test` — 76 tests, 0 fallos.
+
+---
+
+## [1.3.1] — 2026-09-05
+
+Refactor de arquitectura: extracción del use case de publicación.
+
+### Añadido
+
+- `src/lib/publish-use-case.mjs` — orquestación pura del flujo de publicación.
+  Contiene toda la lógica de negocio: chequeo de idempotencia, recuperación
+  desde el audit log, validación del schema, aviso de campos no implementados,
+  llamada a `SPIPClient`, write-back atómico con reintento. Nunca llama a
+  `process.exit()` ni imprime en consola. Devuelve un resultado estructurado
+  con campo `status` (`already-published` | `recovered` | `recover-not-found` |
+  `invalid` | `valid` | `dry-run` | `published` | `published-no-writeback` |
+  `error`). Puede ser invocada desde CLI o desde HTTP sin ninguna adaptación.
+
+- `src/lib/live-write-gateway.mjs` — nueva exportación `findSuccessEntry(action, targetId)`:
+  busca en el audit log la entrada más reciente exitosa para una acción y un
+  `target.id` dados. Antes esta lógica vivía duplicada en `publish-article.mjs`
+  como función privada `findAuditEntry`, que reimplementaba el formato del log
+  que el gateway ya conocía. Ahora el gateway es la única fuente de verdad sobre
+  la estructura del log.
+
+- `src/lib/articles-store.mjs` — nueva exportación `findArticleAbsolutePath(id)`:
+  devuelve la ruta absoluta al archivo JSON de un artículo dado su campo `id`.
+  Necesaria para que `server.mjs` pueda pasar la ruta al use case sin reimplementar
+  la búsqueda por id.
+
+### Modificado
+
+- `src/publish-article.mjs` — reescrito como adaptador CLI delgado (~110 líneas).
+  Ahora solo hace: parsear args, leer el JSON del disco, llamar a
+  `publishArticleUseCase()`, imprimir el resultado y `process.exit`. Toda la
+  lógica de negocio fue movida al use case.
+
+- `src/server.mjs` — endpoint `POST /api/articles/:id/publish` simplificado:
+  ahora adquiere el lock, hace el double-check, llama a `publishArticleUseCase()`
+  y mapea el campo `status` del resultado a los códigos HTTP correctos (200, 207,
+  409, 422, 500). La lógica de publicación ya no está duplicada entre el CLI y
+  el servidor.
+
+### Verificado
+
+- `npm run validate:example` — salida idéntica a antes del refactor.
+- `GET /api/articles` — devuelve la lista correctamente.
+- Servidor arranca sin errores.
+
+---
+
+## [1.3.0] — 2026-09-05
+
+Etapa 2 iniciada — Dashboard mínimo (lista + publicar).
+
+### Añadido
+
+- `src/server.mjs` — servidor Express con tres endpoints:
+  - `GET /api/articles` — lee todos los `.json` de `articles/` y devuelve la
+    lista con los campos clave (título, sección, fecha, estado, `spipArticleId`).
+  - `GET /api/articles/:id` — devuelve el artículo completo por su campo `id`.
+  - `POST /api/articles/:id/publish` — publica el artículo en SPIP con tres
+    capas de protección contra duplicados: chequeo inicial, lock en memoria
+    (suficiente para instancia única; ver ROADMAP para patrón Redis si hay
+    réplicas), y double-check post-lock. Write-back atómico (temp + rename).
+    Import lazy de Playwright: no se carga al arrancar el servidor.
+  - SPA fallback: cualquier ruta no-API sirve `public/index.html`.
+- `src/lib/articles-store.mjs` — capa de acceso a `articles/*.json`:
+  - `listArticles()` — escanea el directorio y devuelve resúmenes ordenados
+    (listos primero, luego por fecha descendente).
+  - `loadArticle(id)` — carga un artículo completo buscando por el campo `id`
+    del JSON (no por nombre de archivo).
+  - `writeBack(id, fields)` — fusiona campos y escribe de forma atómica.
+  - Corrección aplicada durante el smoke-test: `loadArticle` y `writeBack`
+    buscaban el archivo asumiendo `id == nombre de archivo`, lo que fallaba
+    cuando el nombre del archivo no coincide con el campo `id` (como en
+    `example-article.json` / `fauci-fusible-controlado`). Ahora escanean el
+    directorio y buscan por campo `id`.
+- `public/index.html` — dashboard con tema oscuro (fondo `#0f1117`, acento oro):
+  tabla con columnas Título, Sección, Fecha, Estado, ID SPIP y botón de acción.
+  Banner de aviso sobre el campo `date` no implementado en SPIP.
+- `public/app.js` — JS vanilla: carga la lista, renderiza filas, maneja el
+  botón "Publicar en SPIP" con deshabilitado optimístico anti-doble-click,
+  toasts de éxito/error/info, escape HTML en todos los valores (XSS-safe),
+  botón de refresco manual.
+- `package.json` — scripts `start` y `dashboard` añadidos (`node src/server.mjs`).
+- `express@4.19.2` añadido como dependencia (versión exacta).
+
+### Verificado
+
+- `GET /api/articles` devuelve `example-article.json` con id `fauci-fusible-controlado`.
+- `GET /api/articles/fauci-fusible-controlado` devuelve el artículo completo.
+- `GET /api/articles/nonexistent` devuelve 404.
+- `GET /` sirve `public/index.html` (200).
+
+---
+
 ## [1.2.4] — 2026-09-05
 
 ### Corregido

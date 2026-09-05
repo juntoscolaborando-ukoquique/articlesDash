@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -138,5 +139,34 @@ export async function login(
         `quedó en ${page.url()}. ` +
         `Verificar KILOMBOTOP_PASSWORD en .env.`
     );
+  }
+}
+
+export async function withSpipSession(
+  fn,
+  { targetUrl, expectedUrlIncludes, envPath = DEFAULT_ENV_PATH, timeout = 120000, username = USERNAME }
+) {
+  const env = loadEnv(envPath);
+  const password = getPassword(env);
+
+  if (!password) {
+    throw new Error(
+      `No se encontró contraseña en ${envPath}. ` +
+        `Verificar que KILOMBOTOP_PASSWORD está definido.`
+    );
+  }
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox'],
+    timeout,
+  });
+
+  try {
+    const page = await browser.newPage();
+    await login(page, { password, targetUrl, expectedUrlIncludes, username });
+    return await fn(page);
+  } finally {
+    await browser.close();
   }
 }

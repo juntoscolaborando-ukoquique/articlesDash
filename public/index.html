@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kilombo — Dashboard Editorial</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3a;
+      --text:      #e2e4ed;
+      --muted:     #7a7f99;
+      --accent:    #c8a84b;   /* oro kilombo */
+      --green:     #3cb873;
+      --red:       #e05252;
+      --radius:    6px;
+      --font:      'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--accent);
+    }
+    header span.subtitle {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .new-article-btn {
+      background: var(--accent);
+      color: #0f1117;
+      border: none;
+      padding: 0.4rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-left: auto;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .new-article-btn:hover { opacity: 0.85; }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 1100px;
+      margin: 2rem auto;
+      padding: 0 2rem;
+    }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+    .toolbar h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    #refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.35rem 0.85rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    #refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Articles table ── */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    thead th {
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.65rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    tbody td {
+      padding: 0.85rem 1rem;
+      vertical-align: top;
+    }
+
+    .col-title { min-width: 260px; }
+    .col-section { width: 110px; }
+    .col-date { width: 110px; white-space: nowrap; }
+    .col-status { width: 110px; }
+    .col-spip { width: 90px; }
+    .col-action { width: 160px; text-align: right; padding-right: 1.25rem; }
+
+    .article-title {
+      font-weight: 500;
+      color: var(--text);
+    }
+    .article-title-link {
+      background: none;
+      border: none;
+      border-bottom: 1px dashed var(--border);
+      padding: 0;
+      font: inherit;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+    }
+    .article-title-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .title-hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .col-title:hover .title-hint { opacity: 1; }
+    .article-descriptif {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-top: 0.2rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .badge-listo {
+      background: rgba(200,168,75,0.15);
+      color: var(--accent);
+    }
+    .badge-publicado {
+      background: rgba(60,184,115,0.15);
+      color: var(--green);
+    }
+
+    .spip-id {
+      font-family: monospace;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .spip-id a {
+      color: var(--green);
+      text-decoration: none;
+    }
+    .spip-id a:hover { text-decoration: underline; }
+
+    /* ── Publish button ── */
+    .publish-btn {
+      background: var(--accent);
+      color: #0f1117;
+      border: none;
+      padding: 0.4rem 0.9rem;
+      border-radius: var(--radius);
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .publish-btn:hover:not(:disabled) { opacity: 0.85; }
+    .publish-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .publish-btn.publishing {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    /* ── Demote button (Terminado → En Progreso) ── */
+    .demote-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.4rem 0.9rem;
+      border-radius: var(--radius);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      margin-left: 0.4rem;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .demote-btn:hover:not(:disabled) { color: var(--red); border-color: var(--red); }
+    .demote-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Send-to-Edición button (En Progreso → Edición) ── */
+    .edicion-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.4rem 0.9rem;
+      border-radius: var(--radius);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      margin-left: 0.4rem;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .edicion-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+    .edicion-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Promote button (En Progreso → Terminado) ── */
+    .promote-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.4rem 0.9rem;
+      border-radius: var(--radius);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      margin-left: 0.4rem;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .promote-btn:hover:not(:disabled) { color: var(--green); border-color: var(--green); }
+    .promote-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Empty / loading / error states ── */
+    .state-row td {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* ── Toast notifications ── */
+    #toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 1000;
+    }
+    .toast {
+      padding: 0.75rem 1.1rem;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 500;
+      max-width: 380px;
+      animation: slideIn 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .toast-success { background: #1e3d2e; color: var(--green); border: 1px solid var(--green); }
+    .toast-error   { background: #3d1e1e; color: var(--red);   border: 1px solid var(--red); }
+    .toast-info    { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    @keyframes slideIn {
+      from { transform: translateX(2rem); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 0.6rem 1.25rem;
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: -1px;
+      transition: color 0.15s, border-bottom-color 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-count {
+      display: inline-block;
+      background: var(--border);
+      border-radius: 99px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.05rem 0.45rem;
+      margin-left: 0.4rem;
+      vertical-align: middle;
+    }
+    .tab-btn.active .tab-count { background: rgba(200,168,75,0.2); color: var(--accent); }
+
+    /* ── Validation errors (En Progreso tab) ── */
+    .validation-errors {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .validation-error {
+      font-size: 0.75rem;
+      color: var(--red);
+    }
+
+    /* ── Warning banner (date field) ── */
+    .warning-banner {
+      background: rgba(200,168,75,0.08);
+      border: 1px solid rgba(200,168,75,0.3);
+      border-radius: var(--radius);
+      padding: 0.65rem 1rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.83rem;
+      color: var(--accent);
+    }
+
+    /* ── Detail view ── */
+    .detail-view { display: none; }
+    .back-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.35rem 0.85rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.85rem;
+      margin-bottom: 1.25rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .back-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .detail-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem 1.75rem;
+    }
+    .detail-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .detail-title { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+    .detail-surtitre {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.35rem;
+    }
+    .detail-soustitre { color: var(--muted); font-size: 0.95rem; margin-top: 0.25rem; }
+
+    .detail-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.5rem;
+      margin: 1rem 0 1.25rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .detail-meta strong { color: var(--text); font-weight: 600; }
+
+    .detail-section-label {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 1.1rem 0 0.4rem;
+    }
+    .detail-section-label:first-of-type { margin-top: 0; }
+    .detail-descriptif { color: var(--text); font-size: 0.92rem; }
+    .detail-chapo { color: var(--text); font-size: 0.92rem; line-height: 1.6; font-weight: 600; }
+    .detail-chapo p { margin-bottom: 0.5rem; }
+
+    .detail-cover { margin: 0 0 1.1rem; }
+    .detail-cover img {
+      width: 100%;
+      max-height: 360px;
+      object-fit: cover;
+      border-radius: var(--radius);
+      display: block;
+    }
+    .detail-cover figcaption {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 0.4rem;
+    }
+    .cover-credit { font-style: italic; }
+
+    .detail-body, .detail-ps {
+      color: var(--text);
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+    .detail-body h3 { font-size: 1.05rem; margin: 1.2rem 0 0.5rem; color: var(--text); }
+    .detail-body h3:first-child { margin-top: 0; }
+    .detail-body p { margin-bottom: 0.85rem; }
+    .detail-body ul, .detail-body ol { margin: 0 0 0.85rem 1.4rem; }
+    .detail-body li { margin-bottom: 0.3rem; }
+    .detail-body blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 0 0 0.85rem;
+      padding: 0.2rem 0 0.2rem 0.9rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .detail-body a { color: var(--accent); }
+    .detail-ps { font-size: 0.85rem; color: var(--muted); }
+
+    .topics-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .topic-chip {
+      background: rgba(200,168,75,0.1);
+      color: var(--accent);
+      border-radius: 99px;
+      padding: 0.15rem 0.65rem;
+      font-size: 0.78rem;
+    }
+
+    .detail-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Editor view (Edición) ── */
+    .editor-view { display: none; }
+    .editor-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem 1.75rem;
+    }
+    .editor-title-input {
+      display: block;
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font: inherit;
+      font-size: 1.15rem;
+      font-weight: 700;
+      padding: 0.6rem 0.8rem;
+      margin-bottom: 1rem;
+    }
+    .editor-title-input:focus { outline: none; border-color: var(--accent); }
+    .editor-body-textarea {
+      display: block;
+      width: 100%;
+      min-height: 420px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      padding: 0.8rem;
+      resize: vertical;
+    }
+    .editor-body-textarea:focus { outline: none; border-color: var(--accent); }
+    .editor-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .editor-save-status {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .editor-save-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.45rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 0.5rem;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .editor-save-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+    .editor-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .editor-send-btn {
+      background: var(--accent);
+      color: #0f1117;
+      border: none;
+      padding: 0.45rem 1.1rem;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .editor-send-btn:hover:not(:disabled) { opacity: 0.85; }
+    .editor-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🗞 Kilombo</h1>
+    <span class="subtitle">Dashboard Editorial</span>
+    <button id="new-article-btn" class="new-article-btn">+ Nuevo artículo</button>
+  </header>
+
+  <main>
+
+    <!-- ── List view ── -->
+    <div id="view-list">
+
+      <nav class="tabs">
+        <button class="tab-btn" data-tab="edicion">
+          Edición <span class="tab-count" id="count-edicion">0</span>
+        </button>
+        <button class="tab-btn" data-tab="en-progreso">
+          En Progreso <span class="tab-count" id="count-en-progreso">0</span>
+        </button>
+        <button class="tab-btn active" data-tab="terminado">
+          Terminado <span class="tab-count" id="count-terminado">0</span>
+        </button>
+      </nav>
+
+      <div class="warning-banner">
+        ⚠️ El campo <strong>date</strong> se valida pero todavía no se escribe en SPIP (selector pendiente de <code>--inspect</code>).
+        La fecha visible aquí <strong>no</strong> es la fecha que queda en el artículo publicado.
+      </div>
+
+      <div class="toolbar">
+        <h2 id="article-count">Artículos</h2>
+        <button id="refresh-btn">↺ Actualizar</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-title">Título</th>
+              <th class="col-section">Sección</th>
+              <th class="col-date">Fecha</th>
+              <th class="col-status">Estado</th>
+              <th class="col-spip">ID SPIP</th>
+              <th class="col-action"></th>
+            </tr>
+          </thead>
+          <tbody id="articles-body">
+            <tr class="state-row">
+              <td colspan="6">Cargando…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Detail view ── -->
+    <div id="view-detail" class="detail-view">
+      <button id="back-btn" class="back-btn">← Volver a la lista</button>
+      <div id="detail-content"></div>
+    </div>
+
+    <!-- ── Editor view (Edición) ── -->
+    <div id="view-editor" class="editor-view">
+      <button id="editor-back-btn" class="back-btn">← Volver a la lista</button>
+      <div class="editor-card">
+        <input
+          id="editor-title"
+          type="text"
+          class="editor-title-input"
+          placeholder="Título del artículo"
+          maxlength="200"
+        />
+        <textarea
+          id="editor-body"
+          class="editor-body-textarea"
+          placeholder="Escribí o pegá acá el texto del artículo. Las líneas en blanco separan párrafos."
+        ></textarea>
+        <div class="editor-footer">
+          <span id="editor-save-status" class="editor-save-status"></span>
+          <span>
+            <button id="editor-save-btn" class="editor-save-btn">Guardar</button>
+            <button id="editor-send-btn" class="editor-send-btn">Enviar a Revisión →</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

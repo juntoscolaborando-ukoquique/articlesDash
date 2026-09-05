@@ -58,7 +58,7 @@ function analyzeHtml(html) {
     tags.push(tagName);
 
     // Detectar atributos prohibidos
-    const attrNameRegex = /\s([a-zA-Z][\w-]*)\s*(?:=|>|\s|$)/g;
+    const attrNameRegex = /\s([a-zA-Z][\w-]*)\s*(?:=|\s|$)/g;
     let attrMatch;
     while ((attrMatch = attrNameRegex.exec(attrsStr)) !== null) {
       const attrName = attrMatch[1].toLowerCase();

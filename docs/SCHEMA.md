@@ -107,6 +107,21 @@ publicarlo en `www.kilombo.top` vía el formulario SPIP, dejándolo en estado
 | `date`   | string   | sí  | —          | Fecha del artículo en formato `YYYY-MM-DD`, o `""` si desconocida. Se valida pero **todavía no se escribe en SPIP** (ver "Mapeo completo JSON → SPIP") |
 | `topics` | string[] | sí  | —          | Array de 2 a 6 etiquetas en minúsculas |
 | `status` | enum     | sí  | `statut`   | Siempre `"prepa"` en este proyecto |
+| `workflowStatus` | enum | no | — | `"en-progreso"` \| `"terminado"`. Tag editorial **local del dashboard**, nunca se envía a SPIP. Default `"terminado"` si el campo no existe. Ver nota abajo. |
+
+> ⚠️ **`status` vs. `workflowStatus` — no son lo mismo.** `status` es el
+> campo que viaja a SPIP (`statut`) y siempre vale `"prepa"`.
+> `workflowStatus` decide en qué pestaña del dashboard vive el artículo
+> ("En Progreso" / "Terminado"). No lo determina solo la validación: es un
+> campo declarado, y solo dos cosas pueden escribirlo —
+> 1) un humano, vía `POST /api/articles/:id/demote` (Terminado → En
+>    Progreso, siempre permitido, esté válido o no) y el futuro endpoint de
+>    aprobación (En Progreso → Terminado, gateado por `article-validator.mjs`);
+> 2) el propio `listArticles()`, que en cada lectura verifica que ningún
+>    artículo declarado `"terminado"` haya dejado de pasar la validación —
+>    si eso pasa, lo degrada a `"en-progreso"` automáticamente y persiste el
+>    cambio. Esa dirección (auto-degradación) es la única automática; nunca
+>    se promueve un artículo a `"terminado"` sin una aprobación humana.
 
 ### Notas internas
 
