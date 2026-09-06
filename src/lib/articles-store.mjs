@@ -242,6 +242,24 @@ export function loadArticle(id) {
 }
 
 /**
+ * Fusiona `fields` sobre `article` y escribe el resultado en `filepath`
+ * de forma atómica (write a un temporal + rename sobre el original).
+ * Único punto de escritura de artículos — writeBack() y writeBackToFile()
+ * delegan acá para no duplicar la secuencia leer→fusionar→escribir.
+ *
+ * @param {string} filepath — ruta absoluta del archivo a escribir
+ * @param {object} article  — artículo actual ya cargado (se fusiona, no se relee)
+ * @param {object} fields   — campos a fusionar sobre `article`
+ */
+function atomicWrite(filepath, article, fields) {
+  const updated = { ...article, ...fields };
+  const tmpPath = filepath + '.tmp';
+
+  fs.writeFileSync(tmpPath, JSON.stringify(updated, null, 2) + '\n', 'utf8');
+  fs.renameSync(tmpPath, filepath); // atómico en el mismo filesystem
+}
+
+/**
  * Escribe campos adicionales (spipArticleId, publishedAt, publishedUrl)
  * de vuelta al JSON del artículo, de forma atómica (write temp + rename).
  *
@@ -253,12 +271,7 @@ export function writeBack(id, fields) {
   const found = findArticleById(id);
   if (!found) throw new Error(`Artículo no encontrado: ${id}`);
 
-  const { filepath, article } = found;
-  const updated = { ...article, ...fields };
-  const tmpPath = filepath + '.tmp';
-
-  fs.writeFileSync(tmpPath, JSON.stringify(updated, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmpPath, filepath); // atómico en el mismo filesystem
+  atomicWrite(found.filepath, found.article, fields);
 }
 
 /**
@@ -272,9 +285,6 @@ export function writeBackToFile(filepath, fields) {
   } catch (err) {
     throw new Error(`JSON inválido en ${filepath}: ${err.message}`);
   }
-  const updated = { ...article, ...fields };
-  const tmpPath = filepath + '.tmp';
 
-  fs.writeFileSync(tmpPath, JSON.stringify(updated, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmpPath, filepath);
+  atomicWrite(filepath, article, fields);
 }

@@ -30,6 +30,45 @@ function unescapeHtml(str) {
 }
 
 /**
+ * Detecta si un texto pegado en la pantalla de Edición probablemente NO es
+ * prosa sino un JSON o un bloque de HTML/markup pegado por error (p.ej. la
+ * salida cruda de una IA, o el JSON de otro artículo). No es una detección
+ * perfecta — es una señal de alerta para mostrar un aviso al usuario antes
+ * de que `textToParagraphHtml` lo envuelva silenciosamente en `<p>`/`<br>`
+ * y quede guardado como si fuera contenido editorial real.
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+export function looksLikeStructuredPaste(text) {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  // JSON completo pegado entero (objeto o array)
+  if (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  ) {
+    try {
+      JSON.parse(trimmed);
+      return true;
+    } catch {
+      // no era JSON válido — sigue con la heurística de tags abajo
+    }
+  }
+
+  // Alta densidad de tags HTML (más de uno cada ~80 caracteres) sugiere
+  // markup pegado en crudo en lugar de texto plano.
+  const tagMatches = trimmed.match(/<\/?[a-z][a-z0-9]*(?:\s[^>]*)?>/gi) || [];
+  if (tagMatches.length >= 3 && tagMatches.length / trimmed.length > 1 / 80) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Convierte texto plano en HTML válido para `contentHtml`:
  * líneas en blanco separan párrafos (<p>), saltos de línea simples dentro
  * de un párrafo se convierten en <br>. Todo el contenido queda escapado.

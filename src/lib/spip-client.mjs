@@ -199,7 +199,17 @@ async function performCreate(page, article, dryRun) {
       console.log(`   URL en SPIP: ${BASE_URL}/ecrire/?exec=article&id_article=${articleId}`);
       console.log(`   Estado: en preparación (prepa) — listo para revisión humana`);
     } else {
-      console.warn(`\n⚠️  No se pudo extraer el ID del artículo de la URL: ${currentUrl}`);
+      // No podemos confirmar que el artículo se haya creado. Tratarlo como
+      // éxito acá dejaría un spipArticleId=null escrito en el JSON — que es
+      // falsy, así que ni el chequeo de idempotencia ni findSuccessEntry()
+      // lo detectarían después, y el flujo quedaría marcado "published" sin
+      // que nadie pueda confirmar ni recuperar el ID real. Mejor fallar alto
+      // y forzar una revisión manual en /ecrire/.
+      throw new Error(
+        `No se pudo extraer el ID del artículo de la URL tras guardar: ${currentUrl}. ` +
+          `El formulario pudo haberse enviado igual — revisar manualmente en ` +
+          `${BASE_URL}/ecrire/ antes de reintentar, para no crear un duplicado.`
+      );
     }
   } else {
     console.log('\n✅ Dry-run completado — no se creó ningún artículo en la BD');

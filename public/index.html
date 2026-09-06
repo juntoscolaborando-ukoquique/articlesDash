@@ -507,6 +507,21 @@
       margin-bottom: 1rem;
     }
     .editor-title-input:focus { outline: none; border-color: var(--accent); }
+    .editor-section-select {
+      display: block;
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.95rem;
+      padding: 0.5rem 0.8rem;
+      margin-bottom: 1rem;
+      cursor: pointer;
+    }
+    .editor-section-select:focus { outline: none; border-color: var(--accent); }
+    .editor-section-select option { background: var(--surface); }
     .editor-body-textarea {
       display: block;
       width: 100%;
@@ -635,6 +650,15 @@
           placeholder="Título del artículo"
           maxlength="200"
         />
+        <select id="editor-section" class="editor-section-select">
+          <option value="">— Sección —</option>
+          <option value="general">General</option>
+          <option value="tierra">Tierra</option>
+          <option value="gci">GCI</option>
+          <option value="pi">PI</option>
+          <option value="nom">Nuevo Orden Mundial</option>
+          <option value="actualidad">Actualidad</option>
+        </select>
         <textarea
           id="editor-body"
           class="editor-body-textarea"

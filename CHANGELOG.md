@@ -5,6 +5,75 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.3.4] — 2026-09-06
+
+Corrección de bugs encontrados en revisión de código, y sincronización de
+esta bitácora con el estado real del repositorio.
+
+### Corregido
+
+- `src/lib/spip-client.mjs` — `performCreate()` ya no reporta éxito cuando
+  no puede extraer el `id_article` de la URL tras guardar. Antes seguía de
+  largo con un aviso en consola y devolvía `{ articleId: null }`;
+  `publishArticleUseCase()` tomaba eso como una publicación válida y
+  escribía `spipArticleId: null` en el JSON del artículo — un valor falsy
+  que ni el chequeo de idempotencia ni `findSuccessEntry()` detectan
+  después, dejando el artículo marcado "publicado" sin ID real y sin forma
+  de recuperarlo. Ahora lanza un error explícito y el flujo completo
+  reporta `status: 'error'`, forzando una revisión manual en `/ecrire/`
+  antes de reintentar.
+
+- `src/lib/publish-use-case.mjs` — el `recoverCommand` sugerido cuando el
+  write-back falla dos veces asumía `articles/${article.id}.json` como
+  ruta del archivo. Como el `id` del JSON no siempre coincide con el
+  nombre del archivo (ver 1.3.0), el comando sugerido podía apuntar a un
+  archivo inexistente justo en el momento en que alguien más lo necesita.
+  Ahora usa la ruta real (`absolutePath` si se conoce, si no
+  `findArticleAbsolutePath(id)`) y, si de verdad no puede resolverla,
+  avisa en vez de imprimir un comando roto.
+
+- `src/lib/articles-store.mjs` — el helper `atomicWrite()` que el CHANGELOG
+  1.3.3 decía haber extraído nunca llegó a existir en el código:
+  `writeBack()` y `writeBackToFile()` seguían duplicando verbatim la
+  secuencia leer→fusionar→escribir-temp→rename. Ahora el helper existe de
+  verdad y ambas funciones delegan en él. Sin cambio de comportamiento
+  observable, pero la entrada anterior del CHANGELOG ya describe el estado
+  real del código.
+
+- `articles/articulo-1788658811564.json` eliminado — quedó con
+  `contentHtml` conteniendo el JSON completo de otro artículo (incluyendo
+  HTML con estilos inline) pegado como texto plano y envuelto en `<p>`/
+  `<br>` por `textToParagraphHtml()`. Pasaba `validateArticle()` porque el
+  contenido estaba correctamente escapado, así que no había ninguna señal
+  automática de que el "artículo" no era prosa real.
+
+### Añadido
+
+- `src/lib/text-to-html.mjs` — nueva función `looksLikeStructuredPaste(text)`:
+  detecta heurísticamente si el texto pegado en la pantalla de Edición es en
+  realidad JSON o markup HTML en crudo (el caso de arriba) en lugar de
+  prosa. No bloquea el guardado — un borrador siempre debe poder guardarse
+  tal como está — pero `PUT /api/articles/:id/draft` ahora devuelve un
+  `warning` cuando la detecta, y el dashboard lo muestra como toast.
+- `test/text-to-html.test.mjs` — 6 tests nuevos para `looksLikeStructuredPaste`.
+
+### Documentado
+
+- Nota para la próxima sesión: `ROADMAP.md` decía "Etapa 3 — no iniciada",
+  pero `server.mjs`/`articles-store.mjs`/`app.js` ya implementan el flujo
+  completo de tres etapas (`edicion` → `en-progreso` → `terminado`,
+  `createDraftArticle`, `promoteToTerminado`, etc.) sin que ninguna entrada
+  de este CHANGELOG lo documentara. Corregido en ROADMAP.md — ver ahí el
+  estado real de la Etapa 3.
+
+### Verificado
+
+- `npm test` — 82 tests, 0 fallos.
+- Servidor arranca y `GET /api/articles` responde correctamente tras los cambios.
+- `npm run validate:example` — comportamiento idéntico a antes.
+
+---
+
 ## [1.3.3] — 2026-09-05
 
 Refactors de calidad de código y documentación de deuda técnica.

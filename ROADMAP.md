@@ -17,9 +17,9 @@ el backend que la sustenta esté verificado.
 
 ```
 Etapa 1 — Publicar    █████████████  ✅ CERRADA — primera corrida real: ID 109
-Etapa 2 — Dashboard   ██░░░░░░░░░░░  🔄 EN CURSO
-Etapa 3 — Editor      ░░░░░░░░░░░░░  no iniciada
-Etapa 4 — IA          ░░░░░░░░░░░░░  no iniciada
+Etapa 2 — Dashboard   █████████████  ✅ CERRADA
+Etapa 3 — Editor      ██████░░░░░░░  🔄 EN CURSO — flujo básico ya en código
+Etapa 4 — IA pipeline ░░░░░░░░░░░░░  no iniciada
 ```
 
 ---
@@ -202,16 +202,33 @@ Publicar un artículo desde el browser sin tocar la terminal.
 
 ## Etapa 3 — Editor de artículos (texto imperfecto → JSON listo)
 
-**Empieza cuando:** la Etapa 2 esté cerrada.
+**Estado real (actualizado 2026-09-06):** parte de esta etapa ya está en
+código, aunque ninguna entrada de CHANGELOG.md la había documentado hasta
+ahora. Ya existen:
 
-Una pantalla de edición donde se puede cargar o pegar contenido, estructurarlo
-en los campos del schema (título, sección, cuerpo, topics, etc.) y guardarlo
-como JSON en `articles/` listo para publicar desde la lista de la Etapa 2.
+- Flujo de tres pasos `edicion` → `en-progreso` → `terminado`
+  (`workflowStatus` en `articles-store.mjs`, endpoints `demote` / `promote` /
+  `send-to-edicion` / `send-to-revision` en `server.mjs`, pestañas
+  correspondientes en `app.js`).
+- Pantalla de Edición mínima: título + cuadro de texto libre, que el backend
+  convierte a `contentHtml` restringido vía `textToParagraphHtml()`
+  (`PUT /api/articles/:id/draft`).
+- Auto-corrección: un artículo declarado "terminado" que deja de pasar
+  `validateArticle()` se degrada solo a "en-progreso" en la próxima lectura.
+- Guardia contra pegar JSON/HTML en crudo en el cuadro de texto libre
+  (`looksLikeStructuredPaste()`), como aviso no bloqueante — ver CHANGELOG 1.3.4.
 
-Reutiliza del proyecto viejo:
-- `RichTextEditor.tsx` (Tiptap) para `contentHtml`, `chapo`, `ps`
-- `api/lib/schemas.mjs` + patrón Zod para validación en tiempo real
-- Sanitización con DOMPurify
+**Lo que falta para cerrar la etapa:**
+- Editor real de campos (surtitre, soustitre, chapo, ps, topics, coverImage) —
+  hoy Edición solo cubre título + cuerpo en texto plano.
+- Rich-text (Tiptap) en vez de textarea plano, si se decide que hace falta
+  para el contenido real que se está publicando.
+- Sanitización explícita (DOMPurify o equivalente) antes de que el HTML
+  pegado llegue a `article-validator.mjs`, en vez de depender solo de la
+  detección heurística de `looksLikeStructuredPaste()`.
+- Antes de abrir el editor a pegado de HTML más libre, resolver la deuda
+  técnica ya documentada en 1.3.3: reemplazar el validador de HTML basado en
+  regex por un parser real (`node-html-parser` o `parse5`).
 
 ### Entregable de cierre
 El cliente puede crear un artículo completo desde el browser y publicarlo
@@ -219,18 +236,93 @@ sin intervención del programador.
 
 ---
 
-## Etapa 4 — Asistencia con IA
+## Etapa 4 — IA pipeline (Groq en las transiciones del workflow)
 
-**Empieza cuando:** la Etapa 3 esté cerrada y el flujo sin IA sea estable.
+**Empieza cuando:** la Etapa 3 esté cerrada y el flujo manual sea estable
+en producción.
 
-Agrega un botón "Mejorar con IA" sobre el editor de la Etapa 3 que sugiere
-reformulaciones vía Groq. Reutiliza `ai-improve-service.mjs` del proyecto
-viejo, con la corrección del bug de matching texto plano vs. HTML (documentado
-en PLAN_KILOMBO.md §5).
+### Qué es
+
+Groq actúa automáticamente en dos puntos del workflow, no como asistente
+opcional sino como parte de la transición de estado. El artículo nunca pasa
+de etapa con los campos en crudo — el paso por IA es la condición de que
+esté listo para la siguiente fase.
+
+#### Transición 1 — Edición → En Progreso
+
+Cuando el usuario pulsa "Enviar a Revisión", antes de escribir
+`workflowStatus: "en-progreso"` en el JSON, el backend llama a Groq con el
+texto libre que escribió el editor y le pide que lo estructure en los campos
+del schema: `title`, `surtitre`, `soustitre`, `chapo`, `contentHtml`, `ps`,
+`descriptif`, `topics`, `section`, `date`, `sourceSite`, `sourceUrl`.
+
+El resultado se escribe en el JSON antes de que el artículo aparezca en la
+pestaña En Progreso. El usuario ve el artículo ya con los campos asignados,
+no el texto en bruto.
+
+**Contrato esperado de Groq en esta fase:**
+- Extraer título obvio si no está puesto.
+- Rellenar `contentHtml` con el HTML restringido del schema (solo `<p>` y
+  `<br>`; `text-to-html.mjs` puede usarse para sanear la salida).
+- Proponer `topics` (array de 2–6 slugs en minúsculas) y `section` (uno de
+  los valores válidos del schema) como sugerencia — el editor puede
+  corregirlos en En Progreso.
+- No inventar información que no esté en el texto original.
+
+#### Transición 2 — En Progreso → Terminado
+
+Cuando el usuario pulsa "Aprobar", antes de correr `validateArticle` y fijar
+`workflowStatus: "terminado"`, el backend llama a Groq para dar el formato
+definitivo al artículo: ajustar el HTML de `contentHtml` al schema estricto,
+completar `chapo` si está vacío, normalizar `topics` y verificar que `section`
+sea uno de los valores válidos.
+
+Solo si tras el paso por Groq el artículo pasa `validateArticle` completo,
+se escribe `terminado`. Si no pasa, se devuelven los errores de validación
+al usuario para corrección manual (mismo flujo que hoy, sin IA).
+
+**Propósito de esta fase:** llegar a Terminado con el JSON listo para
+publicar directamente, sin intervención manual del programador.
+
+### Módulo a crear
+
+`src/lib/groq-enrichment.mjs` — cliente Groq con dos funciones exportadas:
+
+```js
+enrichDraft(rawText, partialArticle)   // Transición 1
+finalizeArticle(article)               // Transición 2
+```
+
+Ambas devuelven `{ status: 'ok' | 'error', fields, rawResponse }`. El
+caller (use case o handler) decide si escribir el resultado o mostrarlo
+como sugerencia al usuario.
+
+Reutiliza la clave `GROQ_API_KEY` que ya está en `.env` y `.env.example`.
+Reutiliza el patrón de `ai-improve-service.mjs` del proyecto viejo, con la
+corrección del bug de matching texto plano vs. HTML (documentado en
+PLAN_KILOMBO.md §5).
+
+### Decisiones abiertas (a tomar antes de implementar)
+
+1. **¿Automático o con confirmación?** — En la Transición 1, ¿el usuario
+   ve el artículo ya estructurado y puede editar antes de confirmar, o se
+   aplica sin previa vista? Recomendación: mostrar los campos propuestos en
+   un paso intermedio ("Groq sugiere esto — ¿confirmar?") para que el editor
+   tenga control.
+
+2. **Manejo de errores de Groq** — si la API falla o devuelve JSON
+   malformado, ¿se bloquea la transición o se deja pasar el artículo en
+   crudo? Recomendación: dejar pasar con aviso, no bloquear el workflow.
+
+3. **Prompt engineering** — los prompts son parte del código y deben estar
+   versionados en `src/lib/groq-enrichment.mjs`, no hardcodeados en los
+   handlers.
 
 ### Entregable de cierre
-El cliente puede pedir sugerencias de mejora y aplicarlas con un clic, sin
-que el HTML del artículo se corrompa.
+
+Un artículo pegado como texto plano en el editor llega a Terminado con todos
+los campos del schema correctamente asignados y listo para publicar, sin que
+el programador toque el JSON a mano.
 
 ---
 

@@ -32,7 +32,7 @@ import {
 } from './lib/articles-store.mjs';
 import { validateArticle } from './lib/article-validator.mjs';
 import { publishArticleUseCase } from './lib/publish-use-case.mjs';
-import { textToParagraphHtml } from './lib/text-to-html.mjs';
+import { textToParagraphHtml, looksLikeStructuredPaste } from './lib/text-to-html.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -153,11 +153,20 @@ app.put('/api/articles/:id/draft', (req, res) => {
     if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
 
     const title = typeof req.body?.title === 'string' ? req.body.title : article.title;
+    const section = typeof req.body?.section === 'string' ? req.body.section : article.section;
     const text = typeof req.body?.text === 'string' ? req.body.text : '';
     const contentHtml = textToParagraphHtml(text);
 
-    writeBack(id, { title, contentHtml });
-    return res.json({ success: true });
+    writeBack(id, { title, section, contentHtml });
+
+    // No bloquea el guardado — un borrador siempre debe poder guardarse tal
+    // como está — pero avisa si el texto pegado parece JSON/markup en vez de
+    // prosa, para que un humano lo note antes de mandarlo a Revisión.
+    const warning = looksLikeStructuredPaste(text)
+      ? 'El texto pegado parece JSON o HTML en crudo, no prosa. Revisar antes de enviar a Revisión.'
+      : undefined;
+
+    return res.json({ success: true, ...(warning ? { warning } : {}) });
   } catch (err) {
     console.error('[PUT /api/articles/:id/draft]', err);
     return res.status(500).json({ error: err.message });
@@ -195,9 +204,9 @@ app.post('/api/articles/:id/send-to-revision', (req, res) => {
     const article = loadArticle(id);
     if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
 
-    if (!article.title?.trim() || !article.contentHtml?.trim()) {
+    if (!article.title?.trim() || !article.contentHtml?.trim() || !article.section?.trim()) {
       return res.status(422).json({
-        error: 'El artículo necesita título y contenido antes de pasar a revisión.',
+        error: 'El artículo necesita título, sección y contenido antes de pasar a revisión.',
       });
     }
 

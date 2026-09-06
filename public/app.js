@@ -31,6 +31,7 @@ const backBtn       = document.getElementById('back-btn');
 const viewEditor       = document.getElementById('view-editor');
 const editorBackBtn    = document.getElementById('editor-back-btn');
 const editorTitleInput = document.getElementById('editor-title');
+const editorSectionSelect = document.getElementById('editor-section');
 const editorBodyInput  = document.getElementById('editor-body');
 const editorSaveBtn    = document.getElementById('editor-save-btn');
 const editorSendBtn    = document.getElementById('editor-send-btn');
@@ -185,10 +186,13 @@ function renderRow(article) {
   tdDate.className = 'col-date';
   tdDate.textContent = formatDate(article.date);
 
-  // Status badge
+  // Status badge — solo en Terminado (listo/publicado). En Edición y En Progreso
+  // la celda queda vacía: el estado no aporta información útil al editor allí.
   const tdStatus = document.createElement('td');
   tdStatus.className = 'col-status';
-  tdStatus.innerHTML = `<span class="badge badge-${article.status}">${article.status}</span>`;
+  if (workflowStatusOf(article) === 'terminado') {
+    tdStatus.innerHTML = `<span class="badge badge-${article.status}">${article.status}</span>`;
+  }
 
   // SPIP ID
   const tdSpip = document.createElement('td');
@@ -278,7 +282,7 @@ function renderTable(data) {
     const publicados = filtered.filter((a) => a.status === 'publicado').length;
     countEl.textContent = `Terminado — ${listos} listo${listos !== 1 ? 's' : ''}, ${publicados} publicado${publicados !== 1 ? 's' : ''}`;
   } else if (activeTab === 'en-progreso') {
-    countEl.textContent = `En Progreso — ${filtered.length} artículo${filtered.length !== 1 ? 's' : ''} con errores de validación`;
+    countEl.textContent = `En Progreso — ${filtered.length} artículo${filtered.length !== 1 ? 's' : ''} para validar`;
   } else {
     countEl.textContent = `Edición — ${filtered.length} borrador${filtered.length !== 1 ? 'es' : ''}`;
   }
@@ -661,11 +665,13 @@ function setEditorSaveStatus(text) {
 async function openEditor(id) {
   editingArticleId = id;
   showEditorView();
-  editorTitleInput.value = '';
-  editorBodyInput.value = '';
+  editorTitleInput.value   = '';
+  editorSectionSelect.value = '';
+  editorBodyInput.value    = '';
   setEditorSaveStatus('Cargando…');
-  editorTitleInput.disabled = true;
-  editorBodyInput.disabled = true;
+  editorTitleInput.disabled    = true;
+  editorSectionSelect.disabled = true;
+  editorBodyInput.disabled     = true;
 
   try {
     const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
@@ -673,14 +679,16 @@ async function openEditor(id) {
     const { article } = await res.json();
 
     editorTitleInput.value = article.title ?? '';
+    editorSectionSelect.value = article.section ?? '';
     editorBodyInput.value = htmlToPlainText(article.contentHtml ?? '');
     setEditorSaveStatus('');
   } catch (err) {
     showToast(`Error al cargar el borrador: ${err.message}`, 'error');
     showListView();
   } finally {
-    editorTitleInput.disabled = false;
-    editorBodyInput.disabled = false;
+    editorTitleInput.disabled    = false;
+    editorSectionSelect.disabled = false;
+    editorBodyInput.disabled     = false;
   }
 }
 
@@ -691,18 +699,20 @@ async function openEditor(id) {
 async function saveDraft() {
   if (!editingArticleId) return false;
 
-  const title = editorTitleInput.value;
-  const text = editorBodyInput.value;
+  const title   = editorTitleInput.value;
+  const section = editorSectionSelect.value;
+  const text    = editorBodyInput.value;
 
   try {
     const res = await fetch(`/api/articles/${encodeURIComponent(editingArticleId)}/draft`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, text }),
+      body: JSON.stringify({ title, section, text }),
     });
     const data = await res.json();
 
     if (res.ok && data.success) {
+      if (data.warning) showToast(`⚠️ ${data.warning}`, 'info', 8000);
       return true;
     }
     showToast(`❌ Error al guardar: ${data.error ?? 'Error desconocido'}`, 'error');
@@ -732,6 +742,13 @@ async function handleEditorSave() {
 }
 
 async function handleEditorSend() {
+  // Validación cliente antes de guardar: sección obligatoria
+  if (!editorSectionSelect.value) {
+    showToast('❌ Elegí una sección antes de enviar a revisión.', 'error');
+    editorSectionSelect.focus();
+    return;
+  }
+
   editorSendBtn.disabled = true;
   setEditorSaveStatus('Guardando…');
 

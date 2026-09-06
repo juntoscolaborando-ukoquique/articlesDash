@@ -29,7 +29,7 @@
 
 import { assertValidArticle } from './article-validator.mjs';
 import { findSuccessEntry } from './live-write-gateway.mjs';
-import { writeBack, writeBackToFile } from './articles-store.mjs';
+import { writeBack, writeBackToFile, findArticleAbsolutePath } from './articles-store.mjs';
 
 // ── Use case ──────────────────────────────────────────────────────────────────
 
@@ -164,6 +164,18 @@ export async function publishArticleUseCase(article, options = {}) {
     try {
       writeBackOnce();
     } catch (retryErr) {
+      // El id del artículo no siempre coincide con el nombre del archivo
+      // (ver CHANGELOG 1.3.0 — example-article.json / fauci-fusible-controlado),
+      // así que no se puede asumir `articles/${id}.json`. Se busca la ruta real
+      // por contenido (findArticleAbsolutePath ya hace el mismo escaneo que
+      // writeBack); si el propio escaneo no la encuentra, se avisa en vez de
+      // imprimir un comando roto.
+      const realPath = absolutePath ?? findArticleAbsolutePath(article.id);
+      const recoverCommand = realPath
+        ? `node src/publish-article.mjs ${realPath} --recover-from-log`
+        : `(no se encontró el archivo del artículo "${article.id}" para sugerir el comando — ` +
+          `buscar manualmente en articles/ y correr --recover-from-log sobre esa ruta)`;
+
       return {
         status:          'published-no-writeback',
         spipArticleId:   result.articleId,
@@ -171,7 +183,7 @@ export async function publishArticleUseCase(article, options = {}) {
         publishedUrl:    result.url ?? null,
         writeBackFailed: true,
         writeBackError:  retryErr.message,
-        recoverCommand:  `node src/publish-article.mjs articles/${article.id}.json --recover-from-log`,
+        recoverCommand,
         unimplementedFields,
       };
     }
