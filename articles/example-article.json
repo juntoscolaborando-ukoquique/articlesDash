@@ -21,7 +21,12 @@
   "sourceUrl": "https://example.com/articulo-original",
   "sourceDate": "2026-01-01",
   "date": "2026-01-01",
-  "topics": ["ejemplo", "schema", "documentacion"],
+  "topics": [
+    "ejemplo",
+    "schema",
+    "documentacion"
+  ],
   "status": "prepa",
-  "notes": "Artículo de ejemplo — usar solo para validar el schema (npm run validate:example). No publicar nunca."
+  "notes": "Artículo de ejemplo — usar solo para validar el schema (npm run validate:example). No publicar nunca.",
+  "workflowStatus": "en-progreso"
 }
