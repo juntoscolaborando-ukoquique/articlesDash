@@ -26,86 +26,32 @@ gestiona ni la verifica — por diseño deliberado.
 
 ## Problema actual: artículo francés #111 muestra "publicado" incorrectamente
 
-### Qué pasó
+### Resuelto — 2026-09-08
 
-El artículo francés "La haute finance luciférienne" (ID SPIP #111) fue
-enviado a SPIP correctamente en su momento. El write-back escribió:
+El artículo francés "La haute finance luciférienne" fue re-enviado a SPIP
+como **#124** en la sección francesa correcta (`nomfr` → rubrique 9,
+"NOUVEL ORDRE/PLANDÉMISME ET DOMESTICATION").
 
-```json
-"spipArticleId": "111",
-"workflowStatus": "terminado"
-```
+Estado actual: `prepa` — en la cola de revisión humana, no visible al público.
+Próximo paso: un editor debe ir a `/ecrire/` y cambiarlo a `publie`.
 
-Posteriormente el artículo fue **borrado de SPIP** (en una sesión anterior
-de mantenimiento). El JSON local nunca fue actualizado — sigue diciendo
-`terminado` + `spipArticleId: "111"`, pero ese ID ya no existe en SPIP.
+### Qué pasó (histórico)
 
-El dashboard lee el JSON, ve `spipArticleId`, y muestra "publicado" — no
-tiene forma de saber que el artículo fue borrado después.
+El artículo original #111 fue enviado a SPIP correctamente, luego **borrado
+de SPIP** en una sesión de mantenimiento. El JSON local nunca fue actualizado
+— seguía diciendo `terminado` + `spipArticleId: "111"`, pero ese ID ya no
+existía. El dashboard mostraba "publicado" incorrectamente.
 
-### Verificación
+Además, la sección estaba mal asignada: `section: "nom"` apunta a rubrique
+`19` (sección española "NUEVO ORDEN/PLANDEMISMO Y DOMESTICACIÓN"). El artículo
+francés debe ir a rubrique `9` ("NOUVEL ORDRE/PLANDÉMISME ET DOMESTICATION").
 
-```bash
-node src/manage-article-status.mjs --inspect --id 111
-# Resultado: "Widget de estado no encontrado" — confirma que #111 no existe en SPIP
-```
+### Correcciones aplicadas
 
-### Pasos para corregir
-
-Hay dos opciones según la intención editorial:
-
----
-
-#### Opción A — Re-enviar el artículo a SPIP (debe volver a estar en "en curso")
-
-1. Limpiar el marcador del JSON local:
-
-```bash
-node -e "
-const fs = require('fs');
-const path = 'articles/temoignage-haute-finance-luciferienne-ronald-bernard.json';
-const a = JSON.parse(fs.readFileSync(path));
-delete a.spipArticleId;
-delete a.publishedAt;
-delete a.publishedUrl;
-a.workflowStatus = 'terminado';
-fs.writeFileSync(path, JSON.stringify(a, null, 2) + '\n');
-console.log('OK');
-"
-```
-
-2. Verificar que el artículo aparece en el dashboard sin badge "publicado"
-   y con botón "Publicar en SPIP" habilitado.
-
-3. Publicar desde el dashboard o via CLI:
-
-```bash
-node src/publish-article.mjs articles/temoignage-haute-finance-luciferienne-ronald-bernard.json
-```
-
----
-
-#### Opción B — Marcar el artículo como retirado (no se quiere re-publicar)
-
-1. Actualizar el JSON para reflejar el estado real:
-
-```bash
-node -e "
-const fs = require('fs');
-const path = 'articles/temoignage-haute-finance-luciferienne-ronald-bernard.json';
-const a = JSON.parse(fs.readFileSync(path));
-delete a.spipArticleId;
-delete a.publishedAt;
-delete a.publishedUrl;
-a.workflowStatus = 'retractado';
-a.retractedAt = new Date().toISOString();
-fs.writeFileSync(path, JSON.stringify(a, null, 2) + '\n');
-console.log('OK');
-"
-```
-
-2. El artículo desaparecerá de la pestaña Terminado (o aparecerá en la
-   futura sección "Retirados" — ver ROADMAP.md Etapa 3.5).
+- `spip-client.mjs`: añadido `nomfr → 9` a `SLUG_TO_RUBRIQUE_ID`
+- `article-validator.mjs`: `nomfr` añadido a `VALID_SECTIONS`
+- JSON del artículo: `section` corregida de `nom` a `nomfr`, marcadores
+  de #111 limpiados, re-publicado como #124
 
 ---
 
