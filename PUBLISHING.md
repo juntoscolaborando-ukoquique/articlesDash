@@ -116,7 +116,8 @@ enviado fue borrado de SPIP después. El campo `spipArticleId` en el JSON
 local es la única fuente de verdad local — si el artículo desaparece de
 SPIP sin que el JSON se actualice, el dashboard queda desincronizado.
 
-La pestaña Sitio → "🔍 Verificar en SPIP" detecta duplicados pero no
+La pestaña **🌐 Sitio** → panel "Estado del audit log" → botón **"🔍 Verificar en SPIP"**
+(distinto del botón "↺ Actualizar" del dashboard principal, que solo recarga la lista de artículos) detecta duplicados pero no
 detecta artículos borrados cuyo `spipArticleId` sigue en el JSON. Esto
 está documentado como trabajo futuro en ROADMAP.md Etapa 3.5 (botón
 "Desaprobar" que actualiza el JSON al retirar un artículo de SPIP).
