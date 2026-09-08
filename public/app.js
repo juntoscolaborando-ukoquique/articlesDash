@@ -318,48 +318,85 @@ async function loadArticles() {
   }
 }
 
+// ── Shared: workflow transition helper ────────────────────────────────────────
+//
+// publishArticle / demoteArticle / promoteArticle / sendToEdicionArticle /
+// sendToRevisionArticle all follow the same shape: disable the button, show a
+// loading label, POST to an endpoint, toast the result, and either settle
+// (reload + call onSettled) or restore the button. This helper carries that
+// shared skeleton; each caller only supplies the endpoint, labels, and the
+// per-status logic that differs (success message, which status codes get
+// special handling, etc.) via onResult().
+//
+// `btn` may be null (e.g. sending to revisión from the editor view, where
+// there's no dedicated row button) — the helper skips all button DOM writes
+// in that case. Returns the boolean `success` from onResult(), since at least
+// one caller (handleEditorSend) needs to know whether the transition landed.
+
+async function postTransition(endpoint, {
+  btn,
+  loadingText,
+  idleText,
+  busyClass,
+  body,
+  onSettled,
+  onResult,
+}) {
+  if (btn) {
+    btn.disabled = true;
+    if (busyClass) btn.classList.add(busyClass);
+    btn.textContent = loadingText;
+  }
+
+  let outcome;
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      ...(body !== undefined
+        ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        : {}),
+    });
+    const data = await res.json();
+    outcome = onResult(res, data);
+  } catch (err) {
+    outcome = { success: false, restore: true, message: `❌ Error de red: ${err.message}`, toastType: 'error' };
+  }
+
+  showToast(outcome.message, outcome.toastType ?? 'error', outcome.toastDuration ?? 5000);
+
+  if (outcome.settle) await onSettled();
+  if (outcome.restore && btn) {
+    btn.disabled = false;
+    if (busyClass) btn.classList.remove(busyClass);
+    btn.textContent = idleText;
+  }
+
+  return outcome.success ?? false;
+}
+
 // ── Publish ───────────────────────────────────────────────────────────────────
 
 async function publishArticle(id, btn, onSettled) {
-  btn.disabled = true;
-  btn.classList.add('publishing');
-  btn.textContent = 'Publicando…';
-
-  try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(id)}/publish`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dryRun: false }),
-    });
-
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      if (data.writeBackFailed) {
-        showToast(
-          `✅ Publicado en SPIP (ID ${data.spipArticleId}) pero el write-back al JSON falló. Usar --recover-from-log.`,
-          'error',
-          10000
-        );
-      } else {
-        showToast(`✅ Publicado — ID SPIP: ${data.spipArticleId}`, 'success');
+  return postTransition(`/api/articles/${encodeURIComponent(id)}/publish`, {
+    btn, onSettled,
+    loadingText: 'Publicando…', idleText: 'Publicar en SPIP', busyClass: 'publishing',
+    body: { dryRun: false },
+    onResult: (res, data) => {
+      if (res.ok && data.success) {
+        if (data.writeBackFailed) {
+          return {
+            success: true, settle: true, toastType: 'error', toastDuration: 10000,
+            message: `✅ Publicado en SPIP (ID ${data.spipArticleId}) pero el write-back al JSON falló. Usar --recover-from-log.`,
+          };
+        }
+        return { success: true, settle: true, toastType: 'success', message: `✅ Publicado — ID SPIP: ${data.spipArticleId}` };
       }
-      await onSettled();
-    } else if (res.status === 409) {
-      showToast(`⛔ ${data.error}`, 'info');
-      await onSettled();
-    } else {
-      showToast(`❌ Error: ${data.error ?? 'Error desconocido'}`, 'error');
-      btn.disabled = false;
-      btn.classList.remove('publishing');
-      btn.textContent = 'Publicar en SPIP';
-    }
-  } catch (err) {
-    showToast(`❌ Error de red: ${err.message}`, 'error');
-    btn.disabled = false;
-    btn.classList.remove('publishing');
-    btn.textContent = 'Publicar en SPIP';
-  }
+      if (res.status === 409) {
+        return { success: false, settle: true, toastType: 'info', message: `⛔ ${data.error}` };
+      }
+      return { success: false, restore: true, toastType: 'error', message: `❌ Error: ${data.error ?? 'Error desconocido'}` };
+    },
+  });
 }
 
 function handlePublish(e) {
@@ -371,28 +408,16 @@ function handlePublish(e) {
 // ── Demote (Terminado → En Progreso) ──────────────────────────────────────────
 
 async function demoteArticle(id, btn, onSettled) {
-  btn.disabled = true;
-  btn.textContent = 'Enviando…';
-
-  try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(id)}/demote`, {
-      method: 'POST',
-    });
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      showToast('↩️ Enviado a En Progreso', 'info');
-      await onSettled();
-    } else {
-      showToast(`❌ Error: ${data.error ?? 'Error desconocido'}`, 'error');
-      btn.disabled = false;
-      btn.textContent = 'Desaprobar';
-    }
-  } catch (err) {
-    showToast(`❌ Error de red: ${err.message}`, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Desaprobar';
-  }
+  return postTransition(`/api/articles/${encodeURIComponent(id)}/demote`, {
+    btn, onSettled,
+    loadingText: 'Enviando…', idleText: 'Desaprobar',
+    onResult: (res, data) => {
+      if (res.ok && data.success) {
+        return { success: true, settle: true, toastType: 'info', message: '↩️ Enviado a En Progreso' };
+      }
+      return { success: false, restore: true, toastType: 'error', message: `❌ Error: ${data.error ?? 'Error desconocido'}` };
+    },
+  });
 }
 
 function handleDemote(e) {
@@ -404,32 +429,22 @@ function handleDemote(e) {
 // ── Promote (En Progreso → Terminado) ─────────────────────────────────────────
 
 async function promoteArticle(id, btn, onSettled) {
-  btn.disabled = true;
-  btn.textContent = 'Aprobando…';
-
-  try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(id)}/promote`, {
-      method: 'POST',
-    });
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      showToast('✅ Enviado a Terminado', 'success');
-      await onSettled();
-    } else if (res.status === 422) {
-      showToast(`⛔ No se puede aprobar: el artículo no pasa la validación.`, 'error', 8000);
-      btn.disabled = false;
-      btn.textContent = 'Aprobar';
-    } else {
-      showToast(`❌ Error: ${data.error ?? 'Error desconocido'}`, 'error');
-      btn.disabled = false;
-      btn.textContent = 'Aprobar';
-    }
-  } catch (err) {
-    showToast(`❌ Error de red: ${err.message}`, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Aprobar';
-  }
+  return postTransition(`/api/articles/${encodeURIComponent(id)}/promote`, {
+    btn, onSettled,
+    loadingText: 'Aprobando…', idleText: 'Aprobar',
+    onResult: (res, data) => {
+      if (res.ok && data.success) {
+        return { success: true, settle: true, toastType: 'success', message: '✅ Enviado a Terminado' };
+      }
+      if (res.status === 422) {
+        return {
+          success: false, restore: true, toastType: 'error', toastDuration: 8000,
+          message: '⛔ No se puede aprobar: el artículo no pasa la validación.',
+        };
+      }
+      return { success: false, restore: true, toastType: 'error', message: `❌ Error: ${data.error ?? 'Error desconocido'}` };
+    },
+  });
 }
 
 function handlePromote(e) {
@@ -441,28 +456,16 @@ function handlePromote(e) {
 // ── Send to Edición (En Progreso → Edición) ───────────────────────────────────
 
 async function sendToEdicionArticle(id, btn, onSettled) {
-  btn.disabled = true;
-  btn.textContent = 'Enviando…';
-
-  try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(id)}/send-to-edicion`, {
-      method: 'POST',
-    });
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      showToast('✏️ Enviado a Edición', 'info');
-      await onSettled();
-    } else {
-      showToast(`❌ Error: ${data.error ?? 'Error desconocido'}`, 'error');
-      btn.disabled = false;
-      btn.textContent = 'Enviar a Edición';
-    }
-  } catch (err) {
-    showToast(`❌ Error de red: ${err.message}`, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Enviar a Edición';
-  }
+  return postTransition(`/api/articles/${encodeURIComponent(id)}/send-to-edicion`, {
+    btn, onSettled,
+    loadingText: 'Enviando…', idleText: 'Enviar a Edición',
+    onResult: (res, data) => {
+      if (res.ok && data.success) {
+        return { success: true, settle: true, toastType: 'info', message: '✏️ Enviado a Edición' };
+      }
+      return { success: false, restore: true, toastType: 'error', message: `❌ Error: ${data.error ?? 'Error desconocido'}` };
+    },
+  });
 }
 
 function handleSendToEdicion(e) {
@@ -472,39 +475,27 @@ function handleSendToEdicion(e) {
 }
 
 // ── Send to Revisión (Edición → En Progreso) ──────────────────────────────────
+//
+// Called with btn=null from the editor view (handleEditorSend) — there's no
+// dedicated row button there, just the editor's own "Enviar" button, which
+// the caller manages itself. postTransition() skips button DOM writes when
+// btn is null; the boolean return value is how handleEditorSend finds out
+// whether it needs to re-enable its own button.
 
 async function sendToRevisionArticle(id, btn, onSettled) {
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Enviando…';
-  }
-
-  try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(id)}/send-to-revision`, {
-      method: 'POST',
-    });
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      showToast('📝 Enviado a Revisión', 'success');
-      await onSettled();
-      return true;
-    }
-
-    showToast(`⛔ ${data.error ?? 'No se pudo enviar a revisión'}`, 'error', 8000);
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Enviar a Revisión →';
-    }
-    return false;
-  } catch (err) {
-    showToast(`❌ Error de red: ${err.message}`, 'error');
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Enviar a Revisión →';
-    }
-    return false;
-  }
+  return postTransition(`/api/articles/${encodeURIComponent(id)}/send-to-revision`, {
+    btn, onSettled,
+    loadingText: 'Enviando…', idleText: 'Enviar a Revisión →',
+    onResult: (res, data) => {
+      if (res.ok && data.success) {
+        return { success: true, settle: true, toastType: 'success', message: '📝 Enviado a Revisión' };
+      }
+      return {
+        success: false, restore: true, toastType: 'error', toastDuration: 8000,
+        message: `⛔ ${data.error ?? 'No se pudo enviar a revisión'}`,
+      };
+    },
+  });
 }
 
 function handleSendToRevisionFromList(e) {
