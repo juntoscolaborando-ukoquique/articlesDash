@@ -5,6 +5,147 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.3.14] — 2026-09-07
+
+Una sesión Playwright para todas las verificaciones + idempotencia en logExternalDeletion.
+
+### Corregido
+
+- `src/lib/spip-admin.mjs` — nueva función exportada `verifyDuplicates(spipIds)`.
+  Abre **una sola sesión Playwright**, hace login una vez, y navega a cada artículo
+  con el mismo `page` en lugar de lanzar un browser por ID. Retorna un
+  `Map<spipId, { exists: boolean|null, error?: string }>`:
+  - `exists: true` — widget encontrado, artículo existe
+  - `exists: false` — widget ausente (genuinamente borrado)
+  - `exists: null` — error de navegación/timeout, no verificable
+
+  Cada navegación dentro de la sesión tiene un timeout de 30s independiente.
+  Si una falla, las demás continúan en el mismo browser.
+
+- `src/server.mjs` — el bloque `?verify=true` ahora:
+  1. Recopila todos los IDs sobrantes (no canónicos) de todos los grupos de
+     duplicados en una sola lista.
+  2. Llama a `verifyDuplicates()` una vez — un login para todo el lote.
+  3. Aplica el mapa de resultados de vuelta a cada grupo.
+
+  Antes: N logins secuenciales (uno por ID sobrante), cada uno con un browser
+  completo + handshake SSO. Ahora: 1 login + N navegaciones en la misma página.
+
+- `src/server.mjs` — `logExternalDeletion()` es ahora idempotente: antes de
+  escribir, lee el log y verifica si ya existe una entrada
+  `article.delete.permanent` para el mismo ID. Si ya existe, no añade nada.
+  Antes, cada click en "Verificar en SPIP" con un artículo confirmado-borrado
+  añadía una nueva entrada duplicada al log.
+
+### Contexto
+
+Estos dos factores amplifican el bug de 1.3.13 (cualquier error tratado como
+"confirmado borrado"):
+
+1. Los múltiples logins secuenciales multiplicaban la probabilidad de un fallo
+   transitorio — cuantos más IDs a verificar, más chances de un timeout o
+   redirección de sesión a mitad del loop.
+2. Sin idempotencia, cada click repetido mientras el fallo persistiera añadía
+   otra entrada permanente al audit log, sin forma de saberlo salvo inspeccionando
+   el `.jsonl` a mano.
+
+Con la sesión única y la idempotencia, ambas condiciones quedan cerradas.
+
+---
+
+## [1.3.13] — 2026-09-07
+
+Corrección de bug crítico: "Verificar en SPIP" no distinguía artículo borrado de fallo transitorio.
+
+### Corregido
+
+- `src/lib/spip-admin.mjs` — añadida clase exportada `ArticleNotFoundError`.
+  Solo se lanza cuando la página del artículo se cargó correctamente pero el
+  widget `.statut_actuel` está ausente — la forma que tiene SPIP de indicar que
+  el artículo no existe. Todos los demás fallos (login, timeout, red) siguen
+  lanzando `Error` genérico.
+
+  `readStatusWidget()` ahora devuelve `{ notFound: true }` junto con `error`
+  cuando el widget falta. `inspectArticleStatus()` lanza `ArticleNotFoundError`
+  solo para ese caso.
+
+- `src/server.mjs` — el bloque `catch` del loop de verificación ahora distingue:
+  - `ArticleNotFoundError` → confirmado borrado → `spipExists: false` →
+    `logExternalDeletion()` → entrada permanente en el audit log.
+  - Cualquier otro error → `spipExists: null` → aviso en el log del servidor →
+    **no** se escribe nada en el audit log.
+
+  `resolvedInSpip` ahora solo es `true` si todos los IDs sobrantes tienen
+  `spipExists === false` (confirmado), no `null` (no verificable).
+
+- `public/app.js` — entradas con `spipExists === null` se muestran como
+  "⚠️ no se pudo verificar" con el mensaje de error en tooltip, en vez de
+  aparecer como si el artículo estuviera borrado.
+
+### Por qué era grave
+
+El bug original causaba corrupción permanente del audit log:
+
+1. Un fallo transitorio de Playwright (timeout, login fallido, red caída)
+   durante "Verificar en SPIP" escribía `article.delete.permanent` para el
+   ID en cuestión.
+2. `auditLogReport()` lee ese log en cada carga y añade ese ID a
+   `permanentlyDeletedSpipIds`.
+3. Cualquier `article.create` con ese ID queda excluido **para siempre** de
+   todos los reportes futuros — el artículo desaparece silenciosamente del
+   panel de auditoría sin haber sido borrado realmente.
+4. La única recuperación era editar manualmente el `.jsonl` gitignoreado.
+
+---
+
+## [1.3.12] — 2026-09-07
+
+Verificación en vivo de duplicados + botones diferenciados en Gestión del Sitio.
+
+### Añadido
+
+- `src/server.mjs` — `GET /api/site/audit-report?verify=true`: nuevo parámetro
+  opcional que, cuando está presente, llama a `inspectArticleStatus()` vía
+  Playwright para cada ID sobrante de los duplicados detectados. Si el artículo
+  ya no existe en SPIP (fue borrado manualmente o por un script externo), lo marca
+  como `spipExists: false` y lo excluye del conteo de duplicados reales. Esto
+  resuelve el falso positivo de #122 (borrado en sesión anterior pero todavía
+  registrado en el log como `article.create` sin una entrada `article.delete.permanent`
+  correspondiente).
+
+- `public/index.html` + `public/app.js` — dos botones diferenciados en el
+  encabezado del panel "Estado del audit log":
+  - **↺ Recargar** — recarga desde el log local únicamente (sin Playwright,
+    instantáneo). Equivalente al botón anterior.
+  - **🔍 Verificar en SPIP** — llama a `?verify=true`, contacta SPIP para cada
+    duplicado sobrante, y actualiza la UI con el resultado real:
+    - IDs ya borrados aparecen como "ya no existe en SPIP" (gris, sin botón de
+      acción).
+    - Si todos los sobrantes están borrados, el bloque ⚠️ Duplicados colapsa a
+      ✅ con badge "verificado en SPIP".
+    - El botón muestra "🔍 Verificando…" y se deshabilita durante la operación.
+
+- `public/index.html` + `public/app.js` — estilos nuevos:
+  `.audit-verified-badge`, `.audit-spip-gone`, `.audit-verify-btn`.
+
+### Corregido
+
+- `public/app.js` — `renderAuditReport()`: el banner ✅ OK y la línea de
+  resumen ahora filtran `duplicates` por `resolvedInSpip` antes de decidir si
+  mostrar la sección de error. Antes, cualquier entrada duplicada en el log
+  (incluso con IDs ya borrados de SPIP) siempre aparecía como ⚠️ sin forma de
+  descartar el aviso.
+
+### Contexto
+
+El audit log es append-only por diseño — las entradas `article.create` de #120
+y #122 (borrados en sesión anterior) permanecen ahí indefinidamente. Sin
+verificación activa, el panel siempre mostraría ⚠️ Duplicados para
+`per-la-realidad-es-muy-diferente` aunque el problema ya estuviera resuelto.
+El botón "Verificar en SPIP" cierra esa brecha sin modificar el log.
+
+---
+
 ## [1.3.11] — 2026-09-07
 
 Tests de publish-use-case.mjs + seam de inyección de dependencias.

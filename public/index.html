@@ -605,6 +605,7 @@
     /* ── Audit reconciliation panel ── */
     .audit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
     .audit-header h3 { margin: 0; font-size: 0.95rem; font-weight: 700; }
+    .audit-header-btns { display: flex; gap: 0.4rem; }
     .audit-refresh-btn {
       background: transparent;
       border: 1px solid var(--border);
@@ -617,6 +618,14 @@
       transition: color 0.15s, border-color 0.15s;
     }
     .audit-refresh-btn:hover { color: var(--text); border-color: var(--accent); }
+    .audit-verify-btn { color: #60a5fa; border-color: rgba(96,165,250,0.35); }
+    .audit-verify-btn:hover { color: #93c5fd; border-color: #60a5fa; }
+    .audit-verify-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .audit-verified-badge { font-size: 0.75rem; color: #34d399; margin-left: 0.4rem; font-weight: 600; }
+    .audit-resolved { opacity: 0.45; text-decoration: line-through; font-size: 0.82rem; }
+    .audit-spip-gone { color: #6b7280; font-size: 0.78rem; font-style: italic; }
+    .site-input-wrap { position: relative; display: flex; flex-direction: column; gap: 0.15rem; }
+    .site-input-hint { font-size: 0.72rem; color: var(--muted); padding-left: 0.2rem; pointer-events: none; }
     .audit-loading { color: var(--muted); font-size: 0.85rem; padding: 0.3rem 0; }
 
     .audit-section { margin-bottom: 1.1rem; }
@@ -843,6 +852,7 @@
   <!-- ── Sitio view — completamente separado del pipeline editorial ── -->
   <div id="view-site" class="site-view" style="display:none">
     <div class="site-header">
+      <button id="site-back-btn" class="back-btn">← Volver al dashboard</button>
       <h2>Gestión del sitio <span class="site-url">kilombo.top</span></h2>
       <p class="site-subtitle">Operaciones sobre artículos ya publicados en SPIP. No afectan los artículos locales.</p>
     </div>
@@ -850,7 +860,10 @@
     <div class="site-card site-card-audit" id="audit-panel">
       <div class="audit-header">
         <h3>Estado del audit log</h3>
-        <button id="audit-refresh-btn" class="audit-refresh-btn" title="Recargar">↺ Actualizar</button>
+        <div class="audit-header-btns">
+          <button id="audit-refresh-btn" class="audit-refresh-btn" title="Recargar desde el log local">↺ Recargar</button>
+          <button id="audit-verify-btn" class="audit-refresh-btn audit-verify-btn" title="Verificar cada ID duplicado contra el sitio SPIP en vivo (lento)">🔍 Verificar en SPIP</button>
+        </div>
       </div>
       <div id="audit-loading" class="audit-loading" style="display:none">Cargando…</div>
       <div id="audit-content"></div>
@@ -860,7 +873,11 @@
       <h3>Cambiar estado de artículo</h3>
       <p class="site-help">Mueve un artículo a la papelera (<code>poubelle</code>) antes de borrarlo, o cambia su estado editorial en SPIP.</p>
       <div class="site-form-row">
-        <input id="site-status-id" type="text" class="site-input" placeholder="ID SPIP (ej: 119)" />
+        <div class="site-input-wrap">
+          <input id="site-status-id" type="text" class="site-input" placeholder="ID SPIP (ej: 119)" list="published-articles-list" autocomplete="off" />
+          <datalist id="published-articles-list"></datalist>
+          <span class="site-input-hint">▾ artículos publicados</span>
+        </div>
         <select id="site-status-select" class="site-select">
           <option value="">— Estado —</option>
           <option value="prepa">prepa — En preparación</option>
@@ -878,7 +895,7 @@
       <h3>Borrado permanente</h3>
       <p class="site-help">El artículo debe estar en <code>poubelle</code> primero. Esta acción no se puede deshacer.</p>
       <div class="site-form-row">
-        <input id="site-delete-id" type="text" class="site-input" placeholder="ID SPIP (ej: 119)" />
+        <input id="site-delete-id" type="text" class="site-input" placeholder="ID SPIP (ej: 119)" list="published-articles-list" autocomplete="off" />
         <button id="site-delete-btn" class="site-danger-btn">Borrar permanentemente</button>
       </div>
       <div id="site-delete-result" class="site-result"></div>

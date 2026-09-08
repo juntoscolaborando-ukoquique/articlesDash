@@ -344,22 +344,57 @@ presente, el dashboard no ofrece ninguna acción.
 
 ### Solución propuesta
 
-Un botón **"Retirar del sitio"** en cada fila de la pestaña Terminado que
-tenga `spipArticleId`. El flujo tiene dos pasos diferenciados:
+Dos botones en cada fila de la pestaña Terminado que tenga `spipArticleId`,
+uno al lado del otro:
 
-**Paso 1 — Retirar (reversible):** cambia el estado SPIP a `poubelle` vía
+- **"Desaprobar"** — marca el artículo como desaprobado editorialmente pero
+  lo deja en SPIP (en papelera). Útil cuando el contenido necesita revisión
+  y puede volver a publicarse tras correcciones.
+- **"Borrar de SPIP"** — elimina el artículo permanentemente del sitio.
+  Opción separada y más destructiva; solo disponible una vez que el artículo
+  ya está en estado retractado/desaprobado, o como acción directa con doble
+  confirmación.
+
+Los dos botones son acciones distintas con consecuencias distintas — no se
+colapsan en uno. El flujo de cada uno:
+
+El botón de acción principal de cada fila es **stateful** — muestra una cosa
+u otra según si el artículo ya está publicado en SPIP:
+
+- **Sin `spipArticleId`** (no publicado): muestra **"Publicar en SPIP"** —
+  comportamiento actual.
+- **Con `spipArticleId`** (ya publicado): el botón "Publicar en SPIP"
+  desaparece y en su lugar aparece **"Borrar de SPIP"** (rojo, peligro).
+  Esto hace estructuralmente imposible re-publicar un artículo ya publicado
+  desde la UI — el botón que podría crear un duplicado ya no existe.
+
+Al lado del botón principal, para artículos publicados, aparece también
+**"Desaprobar"** (amarillo, advertencia) — acción menos destructiva que mueve
+el artículo a papelera en SPIP sin borrarlo.
+
+Resumen visual por estado:
+
+```
+Sin spipArticleId  →  [ Publicar en SPIP ]
+Con spipArticleId  →  [ Desaprobar ]  [ Borrar de SPIP ]
+```
+
+**Botón "Desaprobar" (reversible):** cambia el estado SPIP a `poubelle` vía
 el endpoint existente `POST /api/site/article/:spipId/status`. El artículo
 deja de ser visible en el sitio público pero sigue en SPIP (papelera). El
 JSON local pasa a `workflowStatus: 'retractado'` + `retractedAt` timestamp.
-El artículo aparece en una nueva sub-sección "Retirados" en la pestaña
-Terminado (o en su propia pestaña si el volumen lo justifica).
+El artículo aparece en una nueva sub-sección "Desaprobados" en la pestaña
+Terminado (o en su propia pestaña si el volumen lo justifica). Desde ahí
+puede re-editarse y volver a publicarse.
 
-**Paso 2 — Borrado permanente (irreversible, opcional):** disponible solo
-para artículos ya en estado `retractado`. Llama al endpoint existente
-`POST /api/site/article/:spipId/delete`. Requiere confirmación explícita
-(mismo patrón que el `confirm()` ya implementado en la pestaña Sitio).
-El JSON local pasa a `workflowStatus: 'borrado'` + `deletedAt`. El artículo
-desaparece de todas las vistas del dashboard.
+**Botón "Borrar de SPIP" (irreversible):** disponible en la misma fila, al
+lado de "Desaprobar". Llama al endpoint existente
+`POST /api/site/article/:spipId/delete` — mueve a papelera y borra
+permanentemente en una sola operación, o en dos pasos si el artículo ya está
+desaprobado. Requiere confirmación explícita con texto claro de irreversibilidad
+(mismo patrón que el `confirm()` ya implementado en la pestaña Sitio). El JSON
+local pasa a `workflowStatus: 'borrado'` + `deletedAt`. El artículo desaparece
+de todas las vistas del dashboard.
 
 ### Lo que ya existe y se reutiliza
 
@@ -374,11 +409,11 @@ desaparece de todas las vistas del dashboard.
 
 - `workflowStatus: 'retractado'` y `'borrado'` como valores válidos en
   `articles-store.mjs` y la lógica de listado.
-- Botón "Retirar del sitio" en las filas de Terminado con `spipArticleId`,
-  con `confirm()` que explique que el artículo dejará de ser visible
-  inmediatamente.
-- Botón "Borrar permanentemente" visible solo para artículos retractados,
-  con `confirm()` reforzado (irreversible).
+- Botón "Desaprobar" y botón "Borrar de SPIP" en las filas de Terminado con
+  `spipArticleId`, uno al lado del otro con estilos diferenciados (amarillo
+  advertencia vs. rojo peligro). Cada uno con su propio `confirm()`.
+- `confirm()` de "Borrar de SPIP" más reforzado (irreversible, dos líneas de
+  advertencia).
 - Endpoint `POST /api/articles/:id/retract` en `server.mjs` que orqueste:
   cambio de estado SPIP → write-back de `workflowStatus: 'retractado'`.
   (Reutiliza `publishArticleUseCase` como modelo arquitectónico — mismo
@@ -388,8 +423,9 @@ desaparece de todas las vistas del dashboard.
 
 ### Entregable de cierre
 
-Un artículo publicado puede ser retirado del sitio desde el dashboard en
-dos clicks (retirar + confirmar), con el estado local actualizado y sin
+Un artículo publicado puede ser desaprobado o borrado de SPIP desde el
+dashboard en dos clicks, con botones separados ("Desaprobar" / "Borrar de
+SPIP") visibles en cada fila de Terminado, el estado local actualizado y sin
 necesidad de tocar `/ecrire/` manualmente.
 
 ---

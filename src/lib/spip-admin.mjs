@@ -40,6 +40,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const AUDIT_LOG_PATH = path.join(PROJECT_ROOT, 'live-write-audit.log.jsonl');
 
+/**
+ * Error específico para cuando un artículo no existe en SPIP.
+ * Distingue "genuinamente borrado" de otros fallos de Playwright
+ * (timeout, login failure, red caída) que no deben tratarse como borrado.
+ */
+export class ArticleNotFoundError extends Error {
+  constructor(spipId) {
+    super(`Artículo ${spipId} no encontrado en SPIP (widget de estado ausente)`);
+    this.name = 'ArticleNotFoundError';
+    this.spipId = spipId;
+  }
+}
+
 export const VALID_SPIP_STATUSES = {
   prepa:    'En curso de redacción',
   prop:     'Propuesto a evaluación',
@@ -60,7 +73,7 @@ export const VALID_SPIP_STATUSES = {
 async function readStatusWidget(page) {
   return page.evaluate(() => {
     const statusBox = document.querySelector('.statut_actuel');
-    if (!statusBox) return { error: 'Widget de estado no encontrado en la página' };
+    if (!statusBox) return { error: 'Widget de estado no encontrado en la página', notFound: true };
 
     const labelEl = statusBox.querySelector('.statut-label');
     const currentStatus = labelEl ? labelEl.textContent.trim() : 'desconocido';
@@ -155,11 +168,61 @@ export async function inspectArticleStatus(spipId) {
   return withSpipSession(
     async (page) => {
       const result = await readStatusWidget(page);
-      if (result.error) throw new Error(result.error);
+      if (result.error) {
+        if (result.notFound) throw new ArticleNotFoundError(spipId);
+        throw new Error(result.error);
+      }
       return result;
     },
     { targetUrl, expectedUrlIncludes: 'exec=article' }
   );
+}
+
+/**
+ * Verifica en una sola sesión Playwright si una lista de IDs SPIP sobrantes
+ * (no canónicos) siguen existiendo en el sitio. Abre el browser una sola vez,
+ * navega a cada artículo con el mismo page, y cierra la sesión al terminar.
+ *
+ * Retorna un Map<spipId, { exists: boolean|null, error?: string }>:
+ *   exists: true  → artículo encontrado en SPIP
+ *   exists: false → confirmado ausente (ArticleNotFoundError)
+ *   exists: null  → no se pudo verificar (error de red, timeout, etc.)
+ *
+ * @param {string[]} spipIds — IDs a verificar (sin el canónico)
+ * @returns {Promise<Map<string, { exists: boolean|null, error?: string }>>}
+ */
+export async function verifyDuplicates(spipIds) {
+  if (spipIds.length === 0) return new Map();
+
+  // Usar el primer ID como targetUrl para el login inicial
+  const firstUrl = `${BASE_URL}/ecrire/?exec=article&id_article=${spipIds[0]}`;
+  const results  = new Map();
+
+  await withSpipSession(
+    async (page) => {
+      for (const spipId of spipIds) {
+        const url = `${BASE_URL}/ecrire/?exec=article&id_article=${spipId}`;
+        try {
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await page.waitForTimeout(800);
+          const widget = await readStatusWidget(page);
+          if (widget.notFound) {
+            results.set(String(spipId), { exists: false });
+          } else if (widget.error) {
+            results.set(String(spipId), { exists: null, error: widget.error });
+          } else {
+            results.set(String(spipId), { exists: true });
+          }
+        } catch (err) {
+          // Error de navegación/timeout — no se puede confirmar ausencia
+          results.set(String(spipId), { exists: null, error: err.message });
+        }
+      }
+    },
+    { targetUrl: firstUrl, expectedUrlIncludes: 'exec=article' }
+  );
+
+  return results;
 }
 
 /**

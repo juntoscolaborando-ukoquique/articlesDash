@@ -19,6 +19,7 @@
 
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
   listArticles,
@@ -35,7 +36,43 @@ import { publishArticleUseCase } from './lib/publish-use-case.mjs';
 import { textToParagraphHtml, looksLikeStructuredPaste } from './lib/text-to-html.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const PUBLIC_DIR    = path.join(__dirname, '..', 'public');
+const AUDIT_LOG     = path.join(__dirname, '..', 'live-write-audit.log.jsonl');
+
+/**
+ * Escribe una entrada article.delete.permanent en el audit log local para un
+ * ID que verificación en vivo confirmó que ya no existe en SPIP. No requiere
+ * Playwright — es solo un append al log para que futuros reloads lo filtren.
+ *
+ * Idempotente: si ya existe una entrada de borrado permanente para este ID
+ * en el log, no escribe nada.
+ */
+function logExternalDeletion(spipId) {
+  try {
+    // Idempotency check — no escribir si ya hay una entrada de borrado para este ID
+    if (fs.existsSync(AUDIT_LOG)) {
+      const existing = fs.readFileSync(AUDIT_LOG, 'utf8');
+      const alreadyLogged = existing.split('\n').some((line) => {
+        try {
+          const e = JSON.parse(line);
+          return e.action === 'article.delete.permanent' &&
+                 String(e.target?.id) === String(spipId);
+        } catch { return false; }
+      });
+      if (alreadyLogged) return;
+    }
+    const entry = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      action:    'article.delete.permanent',
+      script:    'server.mjs/verify',
+      target:    { id: String(spipId) },
+      dryRun:    false,
+      result:    'success',
+      note:      'Confirmado ausente en SPIP por verificación activa — borrado externamente.',
+    });
+    fs.appendFileSync(AUDIT_LOG, entry + '\n', 'utf8');
+  } catch (_) { /* silencioso */ }
+}
 
 // ── Arg parsing ───────────────────────────────────────────────────────────────
 
@@ -405,10 +442,63 @@ app.post('/api/site/article/:spipId/delete', async (req, res) => {
 });
 
 // GET /api/site/audit-report — cruce audit log ↔ archivos locales (sin Playwright)
+// Con ?verify=true, comprueba en SPIP si los IDs duplicados sobrantes siguen vivos.
 app.get('/api/site/audit-report', async (req, res) => {
   try {
     const { auditLogReport } = await getSpipAdmin();
     const report = auditLogReport();
+
+    if (req.query.verify === 'true' && report.duplicates?.length) {
+      const { verifyDuplicates, ArticleNotFoundError } = await getSpipAdmin();
+
+      // Collect all surplus (non-canonical) IDs across all duplicate groups
+      const surplusIds = [];
+      for (const dup of report.duplicates) {
+        const canonical = dup.suggestedCanonical;
+        for (const entry of dup.aliveEntries) {
+          if (String(entry.spipArticleId) !== String(canonical)) {
+            surplusIds.push(String(entry.spipArticleId));
+          }
+        }
+      }
+
+      // One Playwright session for all checks — login once, navigate per entry
+      const verifyMap = await verifyDuplicates(surplusIds);
+
+      // Apply results back to each duplicate group
+      for (const dup of report.duplicates) {
+        const canonical = dup.suggestedCanonical;
+        const verified  = [];
+        for (const entry of dup.aliveEntries) {
+          const id = String(entry.spipArticleId);
+          if (id === String(canonical)) {
+            verified.push({ ...entry, spipExists: true });
+            continue;
+          }
+          const check = verifyMap.get(id);
+          if (check?.exists === false) {
+            // Confirmed gone — write to log (idempotent)
+            logExternalDeletion(id);
+            verified.push({ ...entry, spipExists: false });
+          } else if (check?.exists === true) {
+            verified.push({ ...entry, spipExists: true });
+          } else {
+            // null — couldn't verify (timeout, nav error, etc.)
+            console.warn(`[verify] No se pudo verificar SPIP #${id}: ${check?.error ?? 'desconocido'}`);
+            verified.push({ ...entry, spipExists: null, verifyError: check?.error });
+          }
+        }
+        dup.aliveEntries   = verified;
+        dup.verifiedInSpip = true;
+        // Resolved only if ALL surplus IDs are confirmed gone (false), not unverifiable (null)
+        const stillAlive = verified.filter(
+          (e) => String(e.spipArticleId) !== String(canonical) && e.spipExists !== false
+        );
+        dup.resolvedInSpip = stillAlive.length === 0;
+      }
+      report.verified = true;
+    }
+
     return res.json({ success: true, report });
   } catch (err) {
     console.error('[GET /api/site/audit-report]', err.message);

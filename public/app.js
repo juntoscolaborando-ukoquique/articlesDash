@@ -311,6 +311,7 @@ async function loadArticles() {
     const data = await res.json();
     articles = data.articles ?? [];
     renderTable(articles);
+    populatePublishedArticlesList(articles);
   } catch (err) {
     tbody.innerHTML = `<tr class="state-row"><td colspan="6">Error al cargar artículos: ${escHtml(err.message)}</td></tr>`;
     showToast(`Error al cargar artículos: ${err.message}`, 'error');
@@ -921,11 +922,37 @@ refreshBtn.addEventListener('click', loadArticles);
 newArticleBtn.addEventListener('click', createNewArticle);
 backBtn.addEventListener('click', showListView);
 editorBackBtn.addEventListener('click', handleEditorBack);
+document.getElementById('site-back-btn').addEventListener('click', () => setActiveTab('terminado'));
 editorSaveBtn.addEventListener('click', handleEditorSave);
 editorSendBtn.addEventListener('click', handleEditorSend);
 loadArticles();
 
 // ── Sitio tab — gestión del sitio SPIP ───────────────────────────────────────
+
+/**
+ * Rellena el <datalist id="published-articles-list"> con los últimos 10
+ * artículos publicados (tienen spipArticleId). Cuando el usuario elige una
+ * opción, el valor del input queda como el ID SPIP numérico.
+ * El label visible es "Título (SPIP #ID)" para que sea reconocible.
+ */
+function populatePublishedArticlesList(allArticles) {
+  const datalist = document.getElementById('published-articles-list');
+  if (!datalist) return;
+
+  const published = allArticles
+    .filter((a) => a.spipArticleId)
+    .sort((a, b) => Number(b.spipArticleId) - Number(a.spipArticleId)) // más recientes primero
+    .slice(0, 10);
+
+  datalist.innerHTML = '';
+  for (const a of published) {
+    const opt = document.createElement('option');
+    opt.value = a.spipArticleId;
+    opt.label = `${a.title} (SPIP #${a.spipArticleId})`;
+    datalist.appendChild(opt);
+  }
+}
+
 //
 // Completamente aislado del pipeline editorial. No toca `articles`, `activeTab`
 // ni ninguna función del pipeline. Llama únicamente a /api/site/* endpoints.
@@ -1032,6 +1059,7 @@ siteDeleteBtn.addEventListener('click', handleSiteDelete);
 // ── Audit reconciliation panel ────────────────────────────────────────────────
 
 const auditRefreshBtn = document.getElementById('audit-refresh-btn');
+const auditVerifyBtn  = document.getElementById('audit-verify-btn');
 const auditLoading    = document.getElementById('audit-loading');
 const auditContent    = document.getElementById('audit-content');
 
@@ -1042,11 +1070,16 @@ function fmtTs(ts) {
   } catch { return ts; }
 }
 
-async function loadAuditReport() {
+async function loadAuditReport({ verify = false } = {}) {
   auditLoading.style.display = 'block';
   auditContent.innerHTML = '';
+  if (verify) {
+    auditVerifyBtn.disabled = true;
+    auditVerifyBtn.textContent = '🔍 Verificando…';
+  }
   try {
-    const res  = await fetch('/api/site/audit-report');
+    const url  = verify ? '/api/site/audit-report?verify=true' : '/api/site/audit-report';
+    const res  = await fetch(url);
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error ?? 'Error desconocido');
     renderAuditReport(data.report);
@@ -1054,6 +1087,8 @@ async function loadAuditReport() {
     auditContent.innerHTML = `<p class="audit-error">❌ ${err.message}</p>`;
   } finally {
     auditLoading.style.display = 'none';
+    auditVerifyBtn.disabled = false;
+    auditVerifyBtn.textContent = '🔍 Verificar en SPIP';
   }
 }
 
@@ -1063,17 +1098,34 @@ function renderAuditReport(report) {
 
   // ── A. Duplicados ──────────────────────────────────────────────────────────
   if (duplicates.length > 0) {
-    const sec = document.createElement('div');
-    sec.className = 'audit-section audit-section-danger';
-    const h4 = document.createElement('h4');
-    h4.textContent = `⚠️  Duplicados en SPIP (${duplicates.length})`;
-    sec.appendChild(h4);
-    const note = document.createElement('p');
-    note.className = 'audit-note';
-    note.textContent = 'El mismo artículo fue publicado más de una vez. Mover los IDs sobrantes a la papelera, luego borrarlos desde el formulario de abajo.';
-    sec.appendChild(note);
+    // Separar duplicados reales de los ya resueltos según verificación SPIP
+    const realDups     = duplicates.filter((d) => !d.resolvedInSpip);
+    const resolvedDups = duplicates.filter((d) =>  d.resolvedInSpip);
+    const verified     = report.verified;
 
-    for (const group of duplicates) {
+    const sec = document.createElement('div');
+    sec.className = realDups.length > 0
+      ? 'audit-section audit-section-danger'
+      : 'audit-section audit-section-info';
+
+    const h4 = document.createElement('h4');
+    if (realDups.length > 0) {
+      h4.textContent = `⚠️  Duplicados en SPIP (${realDups.length})`;
+    } else {
+      h4.innerHTML = `✅ Sin duplicados activos${verified ? ' <span class="audit-verified-badge">verificado en SPIP</span>' : ''}`;
+    }
+    sec.appendChild(h4);
+
+    if (realDups.length > 0) {
+      const note = document.createElement('p');
+      note.className = 'audit-note';
+      note.textContent = verified
+        ? 'Duplicados confirmados en vivo en SPIP. Mover los IDs sobrantes a la papelera, luego borrarlos desde el formulario de abajo.'
+        : 'El mismo artículo fue publicado más de una vez según el audit log. Usar "Verificar en SPIP" para confirmar si los duplicados siguen vivos.';
+      sec.appendChild(note);
+    }
+
+    for (const group of realDups) {
       const card = document.createElement('div');
       card.className = 'audit-item';
 
@@ -1100,10 +1152,16 @@ function renderAuditReport(report) {
       list.className = 'audit-spip-list';
       for (const entry of group.aliveEntries) {
         const li = document.createElement('li');
-        const isCanon = canonical && String(entry.spipArticleId) === String(canonical);
+        const isCanon      = canonical && String(entry.spipArticleId) === String(canonical);
+        const spipGone     = group.verifiedInSpip && entry.spipExists === false;
+        const spipUnknown  = group.verifiedInSpip && entry.spipExists === null;
         li.innerHTML = `SPIP #<strong>${entry.spipArticleId}</strong> — ${fmtTs(entry.loggedAt)}`;
         if (isCanon) {
           li.innerHTML += ' <span class="audit-badge audit-badge-canon">canónico</span>';
+        } else if (spipGone) {
+          li.innerHTML += ' <span class="audit-spip-gone">ya no existe en SPIP ✓</span>';
+        } else if (spipUnknown) {
+          li.innerHTML += ` <span class="audit-spip-gone" title="${escHtml(entry.verifyError ?? '')}">⚠️ no se pudo verificar</span>`;
         } else {
           const btn = document.createElement('button');
           btn.className = 'audit-btn-papelera';
@@ -1117,6 +1175,15 @@ function renderAuditReport(report) {
       card.appendChild(list);
       sec.appendChild(card);
     }
+
+    // Duplicados resueltos (solo se muestran si se verificó en SPIP)
+    if (resolvedDups.length > 0 && verified) {
+      const resolvedNote = document.createElement('p');
+      resolvedNote.className = 'audit-note';
+      resolvedNote.innerHTML = `<em>Resueltos (IDs sobrantes ya no existen en SPIP): ${resolvedDups.map((d) => d.slug).join(', ')}</em>`;
+      sec.appendChild(resolvedNote);
+    }
+
     frag.appendChild(sec);
   }
 
@@ -1177,16 +1244,18 @@ function renderAuditReport(report) {
   }
 
   // ── D. OK banner ──────────────────────────────────────────────────────────
-  if (duplicates.length === 0 && writeBacksMissing.length === 0 && orphanedMarkers.length === 0) {
-    const ok = document.createElement('p');
-    ok.className = 'audit-ok';
-    ok.textContent = `✅ Audit log y archivos locales coinciden. (${report.ok.length} artículo${report.ok.length !== 1 ? 's' : ''} OK)`;
-    frag.appendChild(ok);
+  const realDuplicates = duplicates.filter((d) => !d.resolvedInSpip);
+  if (realDuplicates.length === 0 && writeBacksMissing.length === 0 && orphanedMarkers.length === 0) {
+    const okEl = document.createElement('p');
+    okEl.className = 'audit-ok';
+    okEl.innerHTML = `✅ Audit log y archivos locales coinciden. (${report.ok.length} artículo${report.ok.length !== 1 ? 's' : ''} OK)` +
+      (report.verified ? ' <span class="audit-verified-badge">verificado en SPIP</span>' : '');
+    frag.appendChild(okEl);
   } else {
-    // Summary line at the bottom
     const summary = document.createElement('p');
     summary.className = 'audit-summary';
-    summary.textContent = `${ok.length} OK · ${duplicates.length} duplicado${duplicates.length !== 1 ? 's' : ''} · ${writeBacksMissing.length} write-back pendiente${writeBacksMissing.length !== 1 ? 's' : ''} · ${orphanedMarkers.length} huérfano${orphanedMarkers.length !== 1 ? 's' : ''}`;
+    summary.textContent = `${ok.length} OK · ${realDuplicates.length} duplicado${realDuplicates.length !== 1 ? 's' : ''} · ${writeBacksMissing.length} write-back pendiente${writeBacksMissing.length !== 1 ? 's' : ''} · ${orphanedMarkers.length} huérfano${orphanedMarkers.length !== 1 ? 's' : ''}` +
+      (report.verified ? ' · verificado en SPIP ✓' : '');
     frag.appendChild(summary);
   }
 
@@ -1247,7 +1316,8 @@ async function handleRecover(slug, btn) {
   }
 }
 
-auditRefreshBtn.addEventListener('click', loadAuditReport);
+auditRefreshBtn.addEventListener('click', () => loadAuditReport());
+auditVerifyBtn.addEventListener('click',  () => loadAuditReport({ verify: true }));
 
 // Load the audit report automatically when the Sitio tab is activated
 // Hook into sitio tab activation
