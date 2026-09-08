@@ -12,7 +12,7 @@
 
 // ── Valores permitidos ────────────────────────────────────────────────────────
 
-const VALID_SECTIONS = ['general', 'tierra', 'gci', 'pi', 'nom', 'actualidad'];
+const VALID_SECTIONS = ['general', 'tierra', 'gci', 'pi', 'nom', 'nomfr', 'actualidad'];
 const VALID_LANGUAGES = ['ES', 'FR', 'EN'];
 const VALID_STATUSES = ['prepa'];
 const SCHEMA_VERSION = '1.0';

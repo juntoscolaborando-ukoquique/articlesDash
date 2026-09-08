@@ -43,6 +43,7 @@ export const SLUG_TO_RUBRIQUE_ID = {
   gci:        '3',   // icg
   pi:         '2',   // Proletarios internacionalistas
   nom:        '19',  // NUEVO ORDEN / PLANDEMISMO Y DOMESTICACIÓN (ES)
+  nomfr:      '9',   // NOUVEL ORDRE / PLANDÉMISME ET DOMESTICATION (FR)
   actualidad: '21',  // Actualités
 };
 

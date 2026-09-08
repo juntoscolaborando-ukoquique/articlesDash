@@ -2,7 +2,7 @@
   "_schema_version": "1.0",
   "id": "temoignage-haute-finance-luciferienne-ronald-bernard",
   "language": "FR",
-  "section": "nom",
+  "section": "nomfr",
   "surtitre": "MÉCANISMES DE POUVOIR ET CONTRÔLE GLOBAL",
   "title": "La haute finance luciférienne : Le témoignage de Ronald Bernard",
   "soustitre": "Révélations sur le fonctionnement occulté du système financier, les réseaux de chantage et la psychologie des élites",
@@ -24,8 +24,8 @@
   ],
   "status": "prepa",
   "notes": "Version intégrée en français avec liens actifs insérés directement dans le corps du texte (`contentHtml`) et le post-scriptum (`ps`).",
-  "spipArticleId": "111",
-  "publishedAt": "2026-09-06T03:23:11.207Z",
-  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=111",
-  "workflowStatus": "terminado"
+  "workflowStatus": "terminado",
+  "spipArticleId": "124",
+  "publishedAt": "2026-09-08T17:54:12.934Z",
+  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=124"
 }
