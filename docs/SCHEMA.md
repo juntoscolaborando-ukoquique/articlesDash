@@ -98,7 +98,7 @@ publicarlo en `www.kilombo.top` vía el formulario SPIP, dejándolo en estado
 | `author`     | string | no  | —           | Autor/a del artículo original |
 | `sourceSite` | string | no  | `nom_site`  | Nombre del sitio o publicación de origen |
 | `sourceUrl`  | string | no  | `url_site`  | URL del sitio o artículo de origen |
-| `sourceDate` | string | no  | —           | Fecha de publicación en la fuente original (`YYYY-MM-DD`) |
+| `sourceDate` | string | no  | —           | Fecha de publicación en la fuente original (`YYYY-MM-DD`). Se valida pero **no se escribe en SPIP** (sin campo equivalente en el formulario de creación). |
 
 ### Clasificación y estado
 
@@ -197,6 +197,7 @@ Un archivo es READY cuando cumple **todas** estas condiciones:
 | `ps`         | `ps`         | Puede estar en modo WYSIWYG; verificar |
 | `sourceSite` | `nom_site`   | Input visible en el form |
 | `sourceUrl`  | `url_site`   | Input visible en el form |
+| `sourceDate` | —            | **No se escribe** — solo metadato local. Se valida pero no hay campo correspondiente en el formulario SPIP de creación de artículo. |
 | `section`    | `id_parent`  | Slug traducido a ID numérico por `slugToRubriquId()` |
 | `status`     | `statut`     | **No se escribe** — SPIP asigna `prepa` por defecto al crear el artículo. El campo se valida (solo acepta `"prepa"`) pero el script nunca llama a `manage-article-status` ni toca `statut`. |
 | `date`       | `date`       | **Pendiente de implementar.** Se valida pero no hay selector en `spip-client.mjs` todavía; para añadirlo, ejecutar Playwright en modo no headless y verificar el input en el DOM de `article_edit` |

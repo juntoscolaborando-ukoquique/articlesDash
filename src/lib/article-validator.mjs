@@ -286,6 +286,7 @@ export function getUnimplementedFields(article) {
   }
   if (article.author) fields.push('author');
   if (article.date) fields.push('date (fecha del artículo)');
+  if (article.sourceDate) fields.push('sourceDate (fecha en la fuente original)');
   return fields;
 }
 
