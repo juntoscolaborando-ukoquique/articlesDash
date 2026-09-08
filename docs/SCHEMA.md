@@ -189,7 +189,7 @@ Un archivo es READY cuando cumple **todas** estas condiciones:
 | Campo JSON   | Campo SPIP   | Notas |
 |--------------|--------------|-------|
 | `title`      | `titre`      | Campo principal, obligatorio |
-| `surtitre`   | `surtitre`   | Puede no tener input visible en el form; verificar con `--inspect` |
+| `surtitre`   | `surtitre`   | Campo AJAX — puede no estar en el DOM inicial del form; se rellena solo si el selector responde (ver docs/ARTICLE-DESIGN.md) |
 | `soustitre`  | `soustitre`  | Ídem |
 | `descriptif` | `descriptif` | Textarea visible en el form |
 | `chapo`      | `chapo`      | Puede estar en modo WYSIWYG; verificar |
@@ -199,14 +199,8 @@ Un archivo es READY cuando cumple **todas** estas condiciones:
 | `sourceUrl`  | `url_site`   | Input visible en el form |
 | `section`    | `id_parent`  | Slug traducido a ID numérico por `slugToRubriquId()` |
 | `status`     | `statut`     | **No se escribe** — SPIP asigna `prepa` por defecto al crear el artículo. El campo se valida (solo acepta `"prepa"`) pero el script nunca llama a `manage-article-status` ni toca `statut`. |
-| `date`       | `date`       | **Pendiente de implementar.** Se valida pero no hay selector en `spip-client.mjs` todavía; verificar el input real con `--inspect` antes de añadirlo |
+| `date`       | `date`       | **Pendiente de implementar.** Se valida pero no hay selector en `spip-client.mjs` todavía; para añadirlo, ejecutar Playwright en modo no headless y verificar el input en el DOM de `article_edit` |
 | `coverImage` | logo/adjunto | Subida de imagen vía formulario de adjuntos (pendiente de implementar) |
 | `author`     | —            | No tiene campo directo en SPIP en la implementación actual |
 | `topics`     | mots-clés    | Formulario separado en SPIP (pendiente de implementar) |
 | `notes`      | —            | Solo uso interno, nunca se envía |
-
-Nota: la documentación a veces hace referencia a un flag `--inspect` para
-verificar campos cargados por AJAX en el formulario SPIP. Actualmente no hay
-un flag `--inspect` implementado. Para inspección manual, ejecutar con
-`--dry-run` y/o ejecutar Playwright en modo no headless para abrir devtools
-y observar el DOM mientras se carga la página.

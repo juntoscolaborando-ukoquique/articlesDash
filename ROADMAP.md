@@ -297,7 +297,8 @@ Ambas devuelven `{ status: 'ok' | 'error', fields, rawResponse }`. El
 caller (use case o handler) decide si escribir el resultado o mostrarlo
 como sugerencia al usuario.
 
-Reutiliza la clave `GROQ_API_KEY` que ya está en `.env` y `.env.example`.
+Reutiliza la clave `GROQ_API_KEY` — añadir a `.env` y `.env.example` antes de
+implementar (el placeholder ya está en `.env.example`).
 Reutiliza el patrón de `ai-improve-service.mjs` del proyecto viejo, con la
 corrección del bug de matching texto plano vs. HTML (documentado en
 PLAN_KILOMBO.md §5).
@@ -323,6 +324,73 @@ PLAN_KILOMBO.md §5).
 Un artículo pegado como texto plano en el editor llega a Terminado con todos
 los campos del schema correctamente asignados y listo para publicar, sin que
 el programador toque el JSON a mano.
+
+---
+
+## Etapa 3.5 — Retractación de artículos ya publicados
+
+**Empieza cuando:** la pestaña Sitio del dashboard (ya implementada) sea
+estable. No bloquea el cierre de la Etapa 3.
+
+### Problema
+
+El pipeline es hoy de una sola dirección: publicar. Si un artículo ya
+publicado en SPIP es desaprobado (se descubren marcadores `[cite: N]`
+que se publicaron como texto literal, se detecta contenido corrupto, cambio
+editorial de criterio), no hay forma automatizada de retirarlo. El editor
+tiene que entrar manualmente a `/ecrire/`, cambiar el estado y opcionalmente
+borrar. Para artículos con `workflowStatus: 'terminado'` y `spipArticleId`
+presente, el dashboard no ofrece ninguna acción.
+
+### Solución propuesta
+
+Un botón **"Retirar del sitio"** en cada fila de la pestaña Terminado que
+tenga `spipArticleId`. El flujo tiene dos pasos diferenciados:
+
+**Paso 1 — Retirar (reversible):** cambia el estado SPIP a `poubelle` vía
+el endpoint existente `POST /api/site/article/:spipId/status`. El artículo
+deja de ser visible en el sitio público pero sigue en SPIP (papelera). El
+JSON local pasa a `workflowStatus: 'retractado'` + `retractedAt` timestamp.
+El artículo aparece en una nueva sub-sección "Retirados" en la pestaña
+Terminado (o en su propia pestaña si el volumen lo justifica).
+
+**Paso 2 — Borrado permanente (irreversible, opcional):** disponible solo
+para artículos ya en estado `retractado`. Llama al endpoint existente
+`POST /api/site/article/:spipId/delete`. Requiere confirmación explícita
+(mismo patrón que el `confirm()` ya implementado en la pestaña Sitio).
+El JSON local pasa a `workflowStatus: 'borrado'` + `deletedAt`. El artículo
+desaparece de todas las vistas del dashboard.
+
+### Lo que ya existe y se reutiliza
+
+- `spip-admin.mjs` — `changeArticleStatus()` y `permanentlyDelete()` ya
+  implementados y probados.
+- `POST /api/site/article/:spipId/status` y `.../delete` — endpoints ya
+  presentes en `server.mjs`.
+- `confirm()` gates en `handleSiteStatusChange()` y `handleSiteDelete()`
+  en `app.js` — patrón a replicar.
+
+### Lo que hay que añadir
+
+- `workflowStatus: 'retractado'` y `'borrado'` como valores válidos en
+  `articles-store.mjs` y la lógica de listado.
+- Botón "Retirar del sitio" en las filas de Terminado con `spipArticleId`,
+  con `confirm()` que explique que el artículo dejará de ser visible
+  inmediatamente.
+- Botón "Borrar permanentemente" visible solo para artículos retractados,
+  con `confirm()` reforzado (irreversible).
+- Endpoint `POST /api/articles/:id/retract` en `server.mjs` que orqueste:
+  cambio de estado SPIP → write-back de `workflowStatus: 'retractado'`.
+  (Reutiliza `publishArticleUseCase` como modelo arquitectónico — mismo
+  patrón de seams inyectables para testear sin Playwright.)
+- Tests en `test/publish-use-case.test.mjs` o un archivo hermano que
+  verifiquen que la retractación escribe los campos correctos.
+
+### Entregable de cierre
+
+Un artículo publicado puede ser retirado del sitio desde el dashboard en
+dos clicks (retirar + confirmar), con el estado local actualizado y sin
+necesidad de tocar `/ecrire/` manualmente.
 
 ---
 

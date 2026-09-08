@@ -27,9 +27,34 @@
  * @module publish-use-case
  */
 
-import { assertValidArticle } from './article-validator.mjs';
+import { assertValidArticle, getUnimplementedFields } from './article-validator.mjs';
 import { findSuccessEntry } from './live-write-gateway.mjs';
 import { writeBack, writeBackToFile, findArticleAbsolutePath } from './articles-store.mjs';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const WRITEBACK_FAIL_LOG = path.join(__dirname, '..', '..', 'writeback-failures.log.jsonl');
+
+/**
+ * Registra de forma durable un fallo de write-back en un archivo JSONL separado.
+ * No lanza — si este log falla también, al menos el audit log ya tiene la entrada.
+ */
+function logWriteBackFailure(articleId, spipArticleId, publishedAt, error) {
+  try {
+    const entry = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      articleId,
+      spipArticleId,
+      publishedAt,
+      error: error?.message ?? String(error),
+    });
+    fs.appendFileSync(WRITEBACK_FAIL_LOG, entry + '\n', 'utf8');
+  } catch (_) {
+    // silencioso — el audit log ya tiene la evidencia
+  }
+}
 
 // ── Use case ──────────────────────────────────────────────────────────────────
 
@@ -57,7 +82,19 @@ import { writeBack, writeBackToFile, findArticleAbsolutePath } from './articles-
  * }>}
  */
 export async function publishArticleUseCase(article, options = {}) {
-  const { dryRun = false, recoverFromLog = false, validateOnly = false, absolutePath } = options;
+  const {
+    dryRun = false,
+    recoverFromLog = false,
+    validateOnly = false,
+    absolutePath,
+    // Test seam: pass a pre-constructed SPIPClient instance to avoid loading
+    // Playwright in unit tests. Never set this in production code.
+    _spipClient,
+    // Test seams for I/O — default to the real implementations.
+    _findSuccessEntry = findSuccessEntry,
+    _writeBack        = writeBack,
+    _writeBackToFile  = writeBackToFile,
+  } = options;
 
   // ── 1. Chequeo de idempotencia ──────────────────────────────────────────
   if (article.spipArticleId) {
@@ -71,20 +108,21 @@ export async function publishArticleUseCase(article, options = {}) {
 
   // ── 2. Recuperación desde el audit log ───────────────────────────────────
   if (recoverFromLog) {
-    const entry = findSuccessEntry('article.create', article.id);
+    const entry = _findSuccessEntry('article.create', article.id);
     if (!entry) {
       return { status: 'recover-not-found', articleId: article.id };
     }
     const fields = {
-      spipArticleId: entry.articleId,
-      publishedAt:   entry.publishedAt,
-      publishedUrl:  entry.url,
+      spipArticleId:  entry.articleId,
+      publishedAt:    entry.publishedAt,
+      publishedUrl:   entry.url,
+      workflowStatus: 'terminado', // mismo criterio que el path de éxito normal (línea ~174)
     };
     try {
       if (absolutePath) {
-        writeBackToFile(absolutePath, fields);
+        _writeBackToFile(absolutePath, fields);
       } else {
-        writeBack(article.id, fields);
+        _writeBack(article.id, fields);
       }
       return {
         status:        'recovered',
@@ -112,8 +150,8 @@ export async function publishArticleUseCase(article, options = {}) {
   }
 
   // ── 4. Campos no implementados ───────────────────────────────────────────
-  // Import lazy: spip-client.mjs arrastra Playwright; no cargarlo en validate-only
-  const { getUnimplementedFields } = await import('./spip-client.mjs');
+  // getUnimplementedFields vive en article-validator.mjs (sin Playwright),
+  // importado estáticamente arriba — --validate-only no necesita spip-client.
   const unimplementedFields = getUnimplementedFields(article);
 
   if (validateOnly) {
@@ -123,9 +161,13 @@ export async function publishArticleUseCase(article, options = {}) {
   // ── 5. Publicar ──────────────────────────────────────────────────────────
   let result;
   try {
-    const { SPIPClient } = await import('./spip-client.mjs');
-    const client = new SPIPClient();
-    result = await client.publishArticle(article, { dryRun });
+    const client = _spipClient ?? (() => {
+      // Dynamic import keeps Playwright out of --validate-only and test paths
+      return import('./spip-client.mjs').then(({ SPIPClient }) => new SPIPClient());
+    })();
+    // client is either the injected stub or a Promise — resolve uniformly
+    const resolved = await (client instanceof Promise ? client : Promise.resolve(client));
+    result = await resolved.publishArticle(article, { dryRun });
   } catch (err) {
     return { status: 'error', error: err.message, unimplementedFields };
   }
@@ -143,17 +185,18 @@ export async function publishArticleUseCase(article, options = {}) {
   const publishedAt = new Date().toISOString();
 
   const fields = {
-    spipArticleId: result.articleId,
-    publishedAt,   // reuse the same timestamp
-    publishedUrl:  result.url ?? null,
+    spipArticleId:  result.articleId,
+    publishedAt,    // reuse the same timestamp
+    publishedUrl:   result.url ?? null,
+    workflowStatus: 'terminado', // publicado siempre termina en Terminado
   };
 
   // Use articles-store's writeBack (atomic temp+rename, centralized file I/O)
   const writeBackOnce = () => {
     if (absolutePath) {
-      writeBackToFile(absolutePath, fields);
+      _writeBackToFile(absolutePath, fields);
     } else {
-      writeBack(article.id, fields);
+      _writeBack(article.id, fields);
     }
   };
 
@@ -175,6 +218,9 @@ export async function publishArticleUseCase(article, options = {}) {
         ? `node src/publish-article.mjs ${realPath} --recover-from-log`
         : `(no se encontró el archivo del artículo "${article.id}" para sugerir el comando — ` +
           `buscar manualmente en articles/ y correr --recover-from-log sobre esa ruta)`;
+
+      // Log durable — independiente del toast del browser, que puede perderse.
+      logWriteBackFailure(article.id, result.articleId, publishedAt, retryErr);
 
       return {
         status:          'published-no-writeback',

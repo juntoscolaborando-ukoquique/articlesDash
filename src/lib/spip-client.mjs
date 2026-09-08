@@ -14,7 +14,7 @@
  * CAMPOS QUE SE RELLENAN:
  *   Confirmados con input visible en el formulario:
  *     titre, texte, id_parent, descriptif, nom_site, url_site
- *   En BD pero pueden estar en modo WYSIWYG (verificar con --inspect):
+ *   En BD pero pueden estar en modo WYSIWYG (cargan vía AJAX — ver docs/ARTICLE-DESIGN.md):
  *     surtitre, soustitre, chapo, ps
  *
  * LO QUE NO IMPLEMENTA (pendiente):
@@ -34,7 +34,7 @@ const EDIT_URL = `${BASE_URL}/ecrire/?exec=article_edit&new=oui`;
 
 // ── Tabla de rubriques ────────────────────────────────────────────────────────
 // Verificada contra el SPIP vivo en kilombo.top.
-// Para re-verificar: abrir EDIT_URL con --inspect y leer <select name="id_parent">
+// Para re-verificar: abrir EDIT_URL en modo no headless y leer <select name="id_parent">
 
 /** @type {Record<string, string>} */
 export const SLUG_TO_RUBRIQUE_ID = {
@@ -79,10 +79,10 @@ const SELECTORS = {
   sourceUrl:  { selector: 'input[name="url_site"]',       type: 'text' },   // ✅ confirmado
   // Los siguientes existen en la BD SPIP pero pueden estar en modo WYSIWYG.
   // Si no responden a fill(), puede necesitarse interacción adicional con el editor.
-  surtitre:   { selector: 'input[name="surtitre"]',       type: 'text' },   // ⚠️ verificar con --inspect
-  soustitre:  { selector: 'input[name="soustitre"]',      type: 'text' },   // ⚠️ verificar con --inspect
-  chapo:      { selector: 'textarea[name="chapo"]',       type: 'text' },   // ⚠️ verificar con --inspect
-  ps:         { selector: 'textarea[name="ps"]',          type: 'text' },   // ⚠️ verificar con --inspect
+  surtitre:   { selector: 'input[name="surtitre"]',       type: 'text' },   // ⚠️ AJAX — puede no estar en el DOM inicial (ver docs/ARTICLE-DESIGN.md)
+  soustitre:  { selector: 'input[name="soustitre"]',      type: 'text' },   // ⚠️ AJAX — ídem
+  chapo:      { selector: 'textarea[name="chapo"]',       type: 'text' },   // ⚠️ AJAX — ídem
+  ps:         { selector: 'textarea[name="ps"]',          type: 'text' },   // ⚠️ AJAX — ídem
   saveButton: { selector: 'input[type="submit"][name="save"]', type: 'text' },
 };
 
@@ -226,23 +226,16 @@ async function performCreate(page, article, dryRun) {
  * para el aviso de campos no implementados — publish-article.mjs la llama
  * en lugar de mantener su propia lista duplicada.
  *
- * Cuando se implemente un campo aquí, el aviso desaparece automáticamente.
+ * La implementación vive en article-validator.mjs (sin dependencia de Playwright)
+ * para que --validate-only y el servidor puedan llamarla sin cargar este módulo.
+ * Re-exportada aquí para compatibilidad con código existente.
+ *
+ * Cuando se implemente un campo en performCreate(), quitarlo de article-validator.mjs.
  *
  * @param {object} article - artículo validado
  * @returns {string[]} lista de descripciones de campos no implementados
  */
-export function getUnimplementedFields(article) {
-  const fields = [];
-  // Añadir una entrada aquí mientras el campo no tenga implementación en performCreate().
-  // Quitarla cuando se implemente.
-  if (article.coverImage) fields.push('coverImage (imagen destacada)');
-  if (Array.isArray(article.topics) && article.topics.length > 0) {
-    fields.push('topics (mots-clés)');
-  }
-  if (article.author) fields.push('author');
-  if (article.date) fields.push('date (fecha del artículo)');
-  return fields;
-}
+export { getUnimplementedFields } from './article-validator.mjs';
 
 export class SPIPClient {
   /**

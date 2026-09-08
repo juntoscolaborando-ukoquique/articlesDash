@@ -127,6 +127,10 @@ export function listArticles() {
         // Self-heal: Terminado ya no puede sostener este artículo.
         // Escribe una sola vez — la próxima lectura ya lo encuentra
         // declarado "en-progreso" y no repite el write.
+        console.warn(
+          `[articles-store] ⚠️  "${id}" movido de Terminado → En Progreso (falló validación):\n` +
+          validationErrors.map((e) => `    • ${e}`).join('\n')
+        );
         writeBack(id, { workflowStatus: 'en-progreso' });
         workflowStatus = 'en-progreso';
       }

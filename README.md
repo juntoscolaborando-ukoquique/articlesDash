@@ -56,7 +56,7 @@ El artículo **nunca se publica automáticamente**. Siempre queda en `prepa`.
 ```
 articulos-READY/
 ├── articles/                  ← artículos JSON listos para publicar
-│   └── example-article.json   ← artículo de ejemplo completo
+│   └── example-article.json   ← artículo de ejemplo completo (nunca se publica)
 │
 ├── src/
 │   ├── server.mjs             ← servidor Express (dashboard backend)

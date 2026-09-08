@@ -4,5 +4,11 @@
 # Audit log (contains live-site write history, stays local)
 live-write-audit.log.jsonl
 
+# Write-back failure log (IDs published to SPIP but not recorded locally)
+writeback-failures.log.jsonl
+
 # Playwright
 node_modules/
+
+# Temporary files (screenshots from manage-article-status / permanently-delete-article)
+tmp/

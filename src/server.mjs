@@ -320,6 +320,133 @@ app.post('/api/articles/:id/publish', async (req, res) => {
   }
 });
 
+// ── API: gestión del sitio SPIP (/api/site/*) ────────────────────────────────
+//
+// Completamente desacoplada del pipeline editorial (/api/articles/*).
+// Importa solo spip-admin.mjs — nunca articles-store, article-validator,
+// publish-use-case ni text-to-html.
+//
+// Estas rutas son el backend de la pestaña "Sitio" del dashboard.
+// Cualquier nueva operación de administración del sitio SPIP
+// (despublicar, archivar, cambiar rubrique, etc.) se añade aquí.
+
+// Import lazy — spip-admin arrastra Playwright; no cargarlo al arrancar el server.
+let _spipAdmin = null;
+async function getSpipAdmin() {
+  if (!_spipAdmin) _spipAdmin = await import('./lib/spip-admin.mjs');
+  return _spipAdmin;
+}
+
+// GET /api/site/article/:spipId/status — inspecciona el estado en SPIP
+app.get('/api/site/article/:spipId/status', async (req, res) => {
+  const { spipId } = req.params;
+  try {
+    const { inspectArticleStatus } = await getSpipAdmin();
+    const result = await inspectArticleStatus(spipId);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(`[GET /api/site/article/${spipId}/status]`, err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/site/article/:spipId/status — cambia el estado en SPIP
+// Body: { status: 'poubelle' | 'prepa' | 'prop' | 'publie' | 'refuse', dryRun?: boolean }
+app.post('/api/site/article/:spipId/status', async (req, res) => {
+  const { spipId } = req.params;
+  const { status, dryRun = false } = req.body ?? {};
+
+  if (!status) {
+    return res.status(400).json({ error: 'Se requiere el campo "status" en el body.' });
+  }
+
+  // Gate de seguridad: publicar directamente requiere flag explícito
+  if (status === 'publie' && !req.body.approvePublishing) {
+    return res.status(403).json({
+      error: 'Publicar directamente requiere "approvePublishing: true" en el body.',
+    });
+  }
+
+  try {
+    const { changeArticleStatus, VALID_SPIP_STATUSES } = await getSpipAdmin();
+    if (!VALID_SPIP_STATUSES[status]) {
+      return res.status(400).json({
+        error: `Estado inválido "${status}". Válidos: ${Object.keys(VALID_SPIP_STATUSES).join(', ')}`,
+      });
+    }
+    const result = await changeArticleStatus(spipId, status, { dryRun });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(`[POST /api/site/article/${spipId}/status]`, err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/site/article/:spipId/delete — borrado permanente desde la papelera
+// Body: { dryRun?: boolean }
+// El artículo DEBE estar en "poubelle" antes de llamar a este endpoint.
+app.post('/api/site/article/:spipId/delete', async (req, res) => {
+  const { spipId } = req.params;
+  const { dryRun = false } = req.body ?? {};
+
+  try {
+    const { permanentlyDelete } = await getSpipAdmin();
+    const result = await permanentlyDelete(spipId, { dryRun });
+    if (result.success) {
+      return res.json({ success: true, dryRun: result.dryRun ?? false });
+    }
+    return res.status(500).json({
+      error: `El artículo ${spipId} sigue en la papelera tras el intento de borrado.`,
+    });
+  } catch (err) {
+    console.error(`[POST /api/site/article/${spipId}/delete]`, err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/site/audit-report — cruce audit log ↔ archivos locales (sin Playwright)
+app.get('/api/site/audit-report', async (req, res) => {
+  try {
+    const { auditLogReport } = await getSpipAdmin();
+    const report = auditLogReport();
+    return res.json({ success: true, report });
+  } catch (err) {
+    console.error('[GET /api/site/audit-report]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/articles/:id/recover — expone --recover-from-log como llamada de API
+// Escribe spipArticleId de vuelta en el JSON cuando el write-back falló antes.
+app.post('/api/articles/:id/recover', async (req, res) => {
+  const { id } = req.params;
+
+  const article = loadArticle(id);
+  if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
+
+  if (article.spipArticleId) {
+    return res.status(409).json({
+      error:         'El artículo ya tiene spipArticleId. No se necesita recuperación.',
+      spipArticleId: article.spipArticleId,
+    });
+  }
+
+  try {
+    const result = await publishArticleUseCase(article, { recoverFromLog: true });
+    switch (result.status) {
+      case 'recovered':
+        return res.json({ success: true, ...result });
+      case 'recover-not-found':
+        return res.status(404).json({ error: `No hay entrada en el audit log para "${id}"` });
+      default:
+        return res.status(500).json({ error: `Estado inesperado: ${result.status}` });
+    }
+  } catch (err) {
+    console.error(`[POST /api/articles/${id}/recover]`, err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ── SPA fallback — sirve index.html para cualquier ruta no-API ────────────────
 
 app.get('*', (_req, res) => {

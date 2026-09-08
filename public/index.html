@@ -575,6 +575,167 @@
     }
     .editor-send-btn:hover:not(:disabled) { opacity: 0.85; }
     .editor-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Sitio tab ── */
+    .tab-btn-sitio { margin-left: auto; color: var(--muted); }
+
+    .site-view {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+    .site-header { margin-bottom: 2rem; }
+    .site-header h2 { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.35rem; }
+    .site-url { color: var(--accent); font-weight: 700; }
+    .site-subtitle { color: var(--muted); font-size: 0.85rem; margin: 0; }
+
+    .site-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .site-card h3 { margin: 0 0 0.35rem; font-size: 0.95rem; font-weight: 700; }
+    .site-help { color: var(--muted); font-size: 0.82rem; margin: 0 0 0.9rem; }
+    .site-card-danger { border-color: rgba(220,60,60,0.35); }
+    .site-card-danger h3 { color: var(--red); }
+    .site-card-audit { border-color: rgba(96,165,250,0.3); }
+
+    /* ── Audit reconciliation panel ── */
+    .audit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+    .audit-header h3 { margin: 0; font-size: 0.95rem; font-weight: 700; }
+    .audit-refresh-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.8rem;
+      padding: 0.3rem 0.65rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .audit-refresh-btn:hover { color: var(--text); border-color: var(--accent); }
+    .audit-loading { color: var(--muted); font-size: 0.85rem; padding: 0.3rem 0; }
+
+    .audit-section { margin-bottom: 1.1rem; }
+    .audit-section h4 { margin: 0 0 0.3rem; font-size: 0.88rem; font-weight: 700; }
+    .audit-section-danger h4 { color: #f87171; }
+    .audit-section-warning h4 { color: #fbbf24; }
+    .audit-section-info h4 { color: #60a5fa; }
+    .audit-note { color: var(--muted); font-size: 0.8rem; margin: 0 0 0.6rem; }
+
+    .audit-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.65rem 0.9rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.4rem;
+    }
+    .audit-item strong { font-size: 0.88rem; }
+    .audit-slug { font-size: 0.78rem; color: var(--muted); background: rgba(255,255,255,0.06); border-radius: 3px; padding: 0.1rem 0.35rem; }
+    .audit-meta { font-size: 0.78rem; color: var(--muted); margin-left: auto; }
+    .audit-canon { font-size: 0.8rem; color: var(--muted); margin: 0.25rem 0 0; width: 100%; }
+
+    .audit-spip-list { list-style: none; padding: 0; margin: 0.35rem 0 0; width: 100%; font-size: 0.85rem; }
+    .audit-spip-list li { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0; flex-wrap: wrap; }
+
+    .audit-badge { font-size: 0.72rem; border-radius: 999px; padding: 0.1rem 0.5rem; font-weight: 600; }
+    .audit-badge-canon { background: rgba(52,211,153,0.15); color: #34d399; }
+
+    .audit-btn-papelera, .audit-btn-recover {
+      border: none;
+      border-radius: var(--radius);
+      font: inherit;
+      font-size: 0.78rem;
+      padding: 0.25rem 0.65rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .audit-btn-papelera { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .audit-btn-papelera:hover { background: rgba(251,191,36,0.25); }
+    .audit-btn-recover { background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .audit-btn-recover:hover { background: rgba(96,165,250,0.25); }
+    .audit-btn-papelera:disabled, .audit-btn-recover:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .audit-inline-result { font-size: 0.8rem; margin-left: 0.4rem; }
+    .audit-inline-result.ok { color: #34d399; }
+    .audit-inline-result.err { color: #f87171; }
+
+    .audit-ok { color: #34d399; font-size: 0.88rem; margin: 0; font-weight: 600; }
+    .audit-error { color: #f87171; font-size: 0.85rem; margin: 0; }
+    .audit-summary { color: var(--muted); font-size: 0.8rem; margin: 0.5rem 0 0; border-top: 1px solid var(--border); padding-top: 0.5rem; }
+
+    .site-form-row {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .site-input {
+      flex: 0 0 140px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.88rem;
+      padding: 0.45rem 0.7rem;
+    }
+    .site-input:focus { outline: none; border-color: var(--accent); }
+    .site-select {
+      flex: 1;
+      min-width: 160px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.88rem;
+      padding: 0.45rem 0.7rem;
+      cursor: pointer;
+    }
+    .site-select:focus { outline: none; border-color: var(--accent); }
+    .site-action-btn {
+      background: var(--accent);
+      color: #0f1117;
+      border: none;
+      padding: 0.45rem 1rem;
+      border-radius: var(--radius);
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .site-action-btn:hover:not(:disabled) { opacity: 0.85; }
+    .site-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .site-danger-btn {
+      background: transparent;
+      color: var(--red);
+      border: 1px solid var(--red);
+      padding: 0.45rem 1rem;
+      border-radius: var(--radius);
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .site-danger-btn:hover:not(:disabled) { background: var(--red); color: #fff; }
+    .site-danger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .site-result {
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      min-height: 1.2em;
+    }
+    .site-result.ok  { color: var(--green); }
+    .site-result.err { color: var(--red); }
   </style>
 </head>
 <body>
@@ -599,6 +760,9 @@
         </button>
         <button class="tab-btn active" data-tab="terminado">
           Terminado <span class="tab-count" id="count-terminado">0</span>
+        </button>
+        <button class="tab-btn tab-btn-sitio" data-tab="sitio">
+          🌐 Sitio
         </button>
       </nav>
 
@@ -675,6 +839,51 @@
     </div>
 
   </main>
+
+  <!-- ── Sitio view — completamente separado del pipeline editorial ── -->
+  <div id="view-site" class="site-view" style="display:none">
+    <div class="site-header">
+      <h2>Gestión del sitio <span class="site-url">kilombo.top</span></h2>
+      <p class="site-subtitle">Operaciones sobre artículos ya publicados en SPIP. No afectan los artículos locales.</p>
+    </div>
+
+    <div class="site-card site-card-audit" id="audit-panel">
+      <div class="audit-header">
+        <h3>Estado del audit log</h3>
+        <button id="audit-refresh-btn" class="audit-refresh-btn" title="Recargar">↺ Actualizar</button>
+      </div>
+      <div id="audit-loading" class="audit-loading" style="display:none">Cargando…</div>
+      <div id="audit-content"></div>
+    </div>
+
+    <div class="site-card">
+      <h3>Cambiar estado de artículo</h3>
+      <p class="site-help">Mueve un artículo a la papelera (<code>poubelle</code>) antes de borrarlo, o cambia su estado editorial en SPIP.</p>
+      <div class="site-form-row">
+        <input id="site-status-id" type="text" class="site-input" placeholder="ID SPIP (ej: 119)" />
+        <select id="site-status-select" class="site-select">
+          <option value="">— Estado —</option>
+          <option value="prepa">prepa — En preparación</option>
+          <option value="prop">prop — Propuesto</option>
+          <option value="publie">publie — Publicado</option>
+          <option value="refuse">refuse — Rechazado</option>
+          <option value="poubelle">poubelle — Papelera</option>
+        </select>
+        <button id="site-status-btn" class="site-action-btn">Cambiar estado</button>
+      </div>
+      <div id="site-status-result" class="site-result"></div>
+    </div>
+
+    <div class="site-card site-card-danger">
+      <h3>Borrado permanente</h3>
+      <p class="site-help">El artículo debe estar en <code>poubelle</code> primero. Esta acción no se puede deshacer.</p>
+      <div class="site-form-row">
+        <input id="site-delete-id" type="text" class="site-input" placeholder="ID SPIP (ej: 119)" />
+        <button id="site-delete-btn" class="site-danger-btn">Borrar permanentemente</button>
+      </div>
+      <div id="site-delete-result" class="site-result"></div>
+    </div>
+  </div>
 
   <div id="toast-container"></div>
 

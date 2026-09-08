@@ -1,0 +1,35 @@
+{
+  "_schema_version": "1.0",
+  "id": "100000-medicos-contra-las-vacunas-covid-19",
+  "language": "ES",
+  "section": "nom",
+  "surtitre": "CRISIS MÉDICA INTERNACIONAL",
+  "title": "100.000 Médicos contra las vacunas COVID-19",
+  "soustitre": "Declaración conjunta y llamado de alerta de profesionales de la salud",
+  "descriptif": "Documental que recopila las posturas y advertencias de miles de profesionales de la salud a nivel internacional respecto a las vacunas de ARN mensajero.",
+  "coverImage": {
+    "url": "https://tv.canal7salta.com/logo.png",
+    "alt": "Portada representativa para 100.000 Médicos contra las vacunas COVID-19",
+    "caption": "Video disponible en TV Canal 7 Salta",
+    "credit": "TV Canal 7 Salta"
+  },
+  "chapo": "<p><strong>Un consenso médico alternativo que desafía las políticas de vacunación masiva a nivel global.</strong></p>",
+  "contentHtml": "<h3>Manifiesto médico internacional</h3><p>Este documental reúne los testimonios y posicionamientos críticos de miles de profesionales de la salud en Estados Unidos y el mundo. A través de análisis clínicos e informes técnicos, cuestionan la velocidad de desarrollo y la falta de ensayos a largo plazo de las plataformas de ARN mensajero dictadas durante la pandemia.</p><p>Para ver el video completo en la plataforma oficial, acceda al siguiente enlace:</p><p><a href=\"https://tv.canal7salta.com/\">Ver video en TV Canal 7 Salta (Código de catálogo: 1651 / 2200)</a></p>",
+  "ps": "<p>Fuente original disponible en la plataforma de documentales de TV Canal 7 Salta.</p>",
+  "author": "Médicos por la Verdad Internacional",
+  "sourceSite": "TV Canal 7 Salta",
+  "sourceUrl": "https://tv.canal7salta.com/",
+  "sourceDate": "2020-10-15",
+  "date": "2026-09-06",
+  "topics": [
+    "covid-19",
+    "vacunas",
+    "salud",
+    "crisis-medica"
+  ],
+  "status": "prepa",
+  "spipArticleId": "112",
+  "publishedAt": "2026-09-06T03:38:44.197Z",
+  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=112",
+  "workflowStatus": "terminado"
+}

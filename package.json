@@ -1,6 +1,6 @@
 {
   "name": "articulos-ready",
-  "version": "1.0.0",
+  "version": "1.3.8",
   "description": "Publica artículos completos en www.kilombo.top (SPIP 4.4), dejándolos en estado 'en preparación' para revisión humana.",
   "type": "module",
   "scripts": {
@@ -10,6 +10,8 @@
     "validate": "node src/publish-article.mjs --validate-only",
     "validate:example": "node src/publish-article.mjs articles/example-article.json --validate-only",
     "probe": "node src/probe-rubriques.mjs",
+    "status": "node src/manage-article-status.mjs",
+    "delete-article": "node src/permanently-delete-article.mjs",
     "test": "node --test"
   },
   "dependencies": {

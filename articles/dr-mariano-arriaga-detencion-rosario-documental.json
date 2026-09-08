@@ -1,0 +1,35 @@
+{
+  "_schema_version": "1.0",
+  "id": "dr-mariano-arriaga-detencion-rosario-documental",
+  "language": "ES",
+  "section": "nom",
+  "surtitre": "MÉDICOS POR LA VERDAD ARGENTINA",
+  "title": "Dr. Mariano Arriaga: Movilizaciones y Cobertura de Detención en Rosario",
+  "soustitre": "El impacto mediático y judicial del referente de las marchas contra el confinamiento",
+  "descriptif": "Registro documental sobre las acciones públicas, discursos y la detención del Dr. Mariano Arriaga durante las manifestaciones en el Monumento a la Bandera.",
+  "coverImage": {
+    "url": "https://tv.canal7salta.com/logo.png",
+    "alt": "Portada representativa para Dr. Mariano Arriaga: Movilizaciones y Cobertura de Detención en Rosario",
+    "caption": "Video disponible en TV Canal 7 Salta",
+    "credit": "TV Canal 7 Salta"
+  },
+  "chapo": "<p><strong>La crónica audiovisual que documenta uno de los episodios más controvertidos del movimiento crítico en Argentina.</strong></p>",
+  "contentHtml": "<h3>El referente de las plazas y los tribunales</h3><p>El Dr. Mariano Arriaga, uno de los principales impulsores de la agrupación Médicos por la Verdad en Argentina, protagonizó uno de los momentos de mayor tensión mediática tras su detención en Rosario. Este material recopila sus discursos, el contexto de las movilizaciones ciudadanas contra las restricciones y el posterior proceso comunicativo entorno a su figura.</p><p>Para ver el video completo en la plataforma oficial, acceda al siguiente enlace:</p><p><a href=\"https://tv.canal7salta.com/\">Ver video en TV Canal 7 Salta (Código de catálogo: 3213 / 3215)</a></p>",
+  "ps": "<p>Cobertura especial almacenada en el repositorio de Canal 7 Salta.</p>",
+  "author": "Dr. Mariano Arriaga / Colectivo audiovisual",
+  "sourceSite": "TV Canal 7 Salta",
+  "sourceUrl": "https://tv.canal7salta.com/",
+  "sourceDate": "2021-05-30",
+  "date": "2026-09-06",
+  "topics": [
+    "argentina",
+    "mariano-arriaga",
+    "covid-19",
+    "movilizaciones"
+  ],
+  "status": "prepa",
+  "spipArticleId": "116",
+  "publishedAt": "2026-09-06T03:49:43.540Z",
+  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=116",
+  "workflowStatus": "terminado"
+}

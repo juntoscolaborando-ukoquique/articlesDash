@@ -1,0 +1,36 @@
+{
+  "_schema_version": "1.0",
+  "id": "grupo-por-verdad-y-justicia-de-bella-union",
+  "language": "ES",
+  "section": "nom",
+  "surtitre": "OPINANDO N° 10 – AÑO 15",
+  "title": "El grupo por verdad y justicia de Bella Unión y los avances en su causa judicial",
+  "soustitre": "La lucha que no muere, pues sigue viva en cada cañaveral",
+  "descriptif": "Análisis sobre el proceso de justicia transicional, memoria y reparación a escala local en comunidades del interior del país como Bella Unión.",
+  "coverImage": {
+    "url": "https://tv.canal7salta.com/logo.png",
+    "alt": "Memorial y memoria en Bella Unión",
+    "caption": "Fotografía alegórica al trabajo por memoria, verdad y justicia en Bella Unión",
+    "credit": "Opinando / Archivo"
+  },
+  "chapo": "<p><strong>Para Colacho Esteves, <em>in memoriam</em>. Un recorrido por las luchas locales de memoria, verdad y justicia a 52 años de los hechos de violencia estatal.</strong></p>",
+  "contentHtml": "<p>En un momento en que se están disputando y desarticulando las políticas de memoria sobre la actuación ilegítima y el terrorismo de Estado en la región y se impulsan acciones para revisar los parámetros de responsabilidad estatal por el uso de violencia, es importante no perder de vista lo que ocurre en el ámbito local.</p><p>Mirar estos procesos de justicia transicional a escala local en comunidades del interior del país permite reconocer avances en las luchas por verdad, memoria, justicia y reparación, aun cuando hayan pasado 52 años de los hechos vulneratorios de los derechos humanos.</p><p>En los últimos años, se avanzó en la organización de grupos locales, la construcción de memoriales y el acceso a la justicia en pequeñas comunidades del interior del país. Un ejemplo vivo de esto se puede seguir en las crónicas de prensa sobre la lucha colectiva del <a href=\"https://brecha.com.uy/la-justicia-como-norte/\" target=\"_blank\">Semanario Brecha sobre la causa judicial de Bella Unión</a>, donde el tejido comunitario mantiene encendida la memoria de los cañaverales.</p>",
+  "ps": "<p>Publicado originalmente en <em>Opinando N° 10</em> (14 de agosto de 2026). Tiempo de lectura estimado: 4 min.</p>",
+  "author": "Mariana Achugar y Flor de María Meza Tananta",
+  "sourceSite": "Opinando",
+  "sourceUrl": "",
+  "sourceDate": "2026-08-14",
+  "date": "2026-09-06",
+  "topics": [
+    "bella-union",
+    "verdad-y-justicia",
+    "derechos-humanos",
+    "uruguay",
+    "memoria"
+  ],
+  "status": "prepa",
+  "spipArticleId": "121",
+  "publishedAt": "2026-09-06T04:14:19.185Z",
+  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=121",
+  "workflowStatus": "terminado"
+}

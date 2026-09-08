@@ -5,6 +5,358 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.3.11] — 2026-09-07
+
+Tests de publish-use-case.mjs + seam de inyección de dependencias.
+
+### Añadido
+
+- `test/publish-use-case.test.mjs` — 13 tests nuevos para `publishArticleUseCase`,
+  organizados en cuatro grupos:
+  - Idempotencia: artículo ya publicado devuelve `already-published`.
+  - Validación: schema inválido devuelve `invalid`; `--validate-only` devuelve
+    `valid` sin tocar el disco.
+  - Publicación normal: éxito, `dry-run`, error de SPIPClient (lanza / devuelve
+    `success=false`), write-back fallido dos veces devuelve `published-no-writeback`.
+  - Recuperación: entrada en log devuelve `recovered`, sin entrada devuelve
+    `recover-not-found`.
+
+  Test clave — los dos paths de éxito escriben el mismo conjunto de campos:
+  ```
+  publicación normal y recuperación escriben el mismo conjunto de campos en el write-back
+  ```
+  Este test habría atrapado el bug de `workflowStatus: 'terminado'` ausente en
+  la recuperación (corregido en 1.3.9 / tar.gz fixed).
+
+- `src/lib/publish-use-case.mjs` — tres seams de inyección de dependencias para
+  tests (nunca usados en producción):
+  - `_spipClient` — instancia pre-construida de SPIPClient; evita cargar Playwright.
+  - `_findSuccessEntry` — stub del lector del audit log.
+  - `_writeBack` / `_writeBackToFile` — stubs del write-back al disco.
+
+### Verificado
+
+- `node --test` — 95 tests, 0 fallos (antes: 82).
+
+---
+
+## [1.3.10] — 2026-09-07
+
+Gates de confirmación reales en la pestaña Sitio del dashboard.
+
+### Corregido
+
+- `public/app.js` — `handleSiteStatusChange()`: seleccionar "publie" ahora muestra
+  un `confirm()` antes de enviar la petición. Antes el código hacía
+  `if (status === 'publie') body.approvePublishing = true` automáticamente, lo que
+  convertía el gate del servidor en decorativo — el usuario nunca veía ninguna
+  fricción. Ahora el diálogo explica que publicar directamente hace el artículo
+  visible en el sitio público inmediatamente y pide confirmación explícita.
+
+- `public/app.js` — `handleSiteDelete()`: borrado permanente ahora muestra un
+  `confirm()` antes de enviar. La operación es irreversible (el artículo desaparece
+  completamente de SPIP), pero antes se ejecutaba sin ninguna confirmación — un
+  solo click bastaba. Ahora el diálogo advierte de la irreversibilidad y recuerda
+  que el artículo debe estar en la papelera primero.
+
+### Contexto
+
+El servidor tiene gates deliberados para operaciones peligrosas (publicar
+directamente requiere `approvePublishing: true` en el body, el CLI equivalente
+requiere `KILO_APPROVE_PUBLISHING=true` como variable de entorno). Pero el
+dashboard los satisfacía automáticamente sin intervención del usuario — la
+fricción era solo para scripts, no para la UI.
+
+---
+
+## [1.3.9] — 2026-09-07
+
+Borrado permanente de artículo de prueba (test-publicacion-automatica).
+
+### Eliminado
+
+- Artículo SPIP ID 109 (`test-publicacion-automatica`) — borrado permanentemente
+  del sitio kilombo.top. Era un artículo de prueba técnica creado durante la
+  Etapa 1 (v1.2.0) para verificar el pipeline de publicación, nunca destinado
+  a publicarse. Proceso:
+  1. `node src/manage-article-status.mjs --inspect --id 109` — confirmó estado
+     "A la papelera"
+  2. `node src/permanently-delete-article.mjs --id 109 --dry-run` — previsualización
+  3. `node src/permanently-delete-article.mjs --id 109` — borrado ejecutado
+  4. Verificación: `--inspect --id 109` ahora devuelve "Widget de estado no
+     encontrado" (artículo no existe)
+
+### Contexto
+
+El artículo 109 fue identificado durante la auditoría de reconciliación entre
+el log de publicaciones (`live-write-audit.log.jsonl`) y los archivos JSON
+locales. A diferencia de los artículos 119 y 120 (duplicados por fallo de
+write-back, también borrados), el 109 era deliberadamente un test que cumplió
+su propósito y ya no tenía razón de existir en el sitio.
+
+---
+
+## [1.3.8] — 2026-09-07
+
+Corrección de la carga lazy de spip-client en --validate-only.
+
+### Corregido
+
+- `src/lib/publish-use-case.mjs` — el paso §4 (campos no implementados) hacía
+  `await import('./spip-client.mjs')` antes de comprobar `validateOnly`, lo que
+  cargaba Playwright igualmente en modo `--validate-only`. El README y el
+  comentario interno decían que el import era "lazy para no cargar Playwright en
+  validate-only" — descripción incorrecta del comportamiento real.
+
+  Fix: `getUnimplementedFields` se movió a `article-validator.mjs` (sin
+  dependencias de Playwright) e importada estáticamente. El import lazy de
+  `spip-client.mjs` queda solo en el paso §5 (publicar), que nunca se alcanza
+  en `--validate-only`. Verificado: `playwright` no aparece en el module cache
+  tras cargar `publish-use-case.mjs` sin publicar.
+
+- `src/lib/spip-client.mjs` — `getUnimplementedFields` reemplazada por un
+  re-export de `article-validator.mjs` para no romper cualquier importador
+  externo que la use desde `spip-client`.
+
+- `src/lib/article-validator.mjs` — añadida `getUnimplementedFields(article)`:
+  función pura que lista los campos del schema todavía no escritos en SPIP
+  (coverImage, topics, author, date). Sin dependencias externas.
+
+---
+
+## [1.3.7] — 2026-09-07
+
+Correcciones de seguridad y calidad de datos.
+
+### Corregido
+
+- `public/app.js` — `renderDetail()`: `contentHtml`, `chapo` y `ps` ahora pasan
+  por `sanitizeHtml()` antes de ser inyectados con `innerHTML`. Antes se
+  insertaban directamente, exponiendo la vista de detalle a HTML arbitrario de
+  artículos en En Progreso que aún no habían pasado validación.
+
+  `sanitizeHtml()` usa `DOMParser` (árbol real, sin regex) y permite únicamente
+  los tags del schema (`h3`, `h4`, `p`, `br`, `strong`, `em`, `a`, `img`, etc.)
+  con un subconjunto seguro de atributos. Cualquier tag no permitido se reemplaza
+  por su contenido textual. Las URLs `javascript:` y `data:` en `href`/`src` se
+  bloquean. Los enlaces `<a>` reciben `rel="noopener noreferrer"` automáticamente.
+
+  El conjunto de tags permitidos refleja `ALLOWED_TAGS` en `article-validator.mjs`
+  — si cambia uno, hay que actualizar el otro.
+
+- `src/lib/article-validator.mjs` — `validateHtml()`: nuevo chequeo de
+  marcadores de cita AI (`[cite: N]`). Cualquier campo HTML (`contentHtml`,
+  `chapo`, `ps`) que los contenga falla validación con un mensaje explícito.
+  Estos artefactos se publicarían como texto literal visible en el sitio.
+
+- `src/lib/articles-store.mjs` — `listArticles()`: el self-heal que degrada
+  artículos de Terminado → En Progreso ahora emite `console.warn` con el id del
+  artículo y la lista de errores de validación que motivaron la degradación.
+  Antes la operación era silenciosa — no había forma de saber qué artículos
+  habían sido degradados ni por qué sin releer los JSONs.
+
+### Datos
+
+- `articles/testimonios-french` (sin extensión) — eliminado. Era una copia
+  antigua del artículo sin `spipArticleId`, invisible a `listArticles()`, dejada
+  por un error de edición.
+
+- `articles/example-article.json` — recreado como fixture genérico del schema
+  (aplicando patch-01-example-article.patch). El archivo original tenía `id:
+  "fauci-fusible-controlado"` y era el artículo real publicado como ID 110; al
+  ser renombrado correctamente a `fauci-fusible-controlado.json` dejó roto
+  `npm run validate:example`. El nuevo fixture usa `id: "example-article"`, sin
+  `spipArticleId` y con nota explícita de que no debe publicarse nunca.
+
+- `README.md` — línea del árbol de directorios actualizada: `example-article.json`
+  ahora dice "(nunca se publica)".
+
+### Auto-corrección en caliente (self-heal)
+
+Al arrancar el servidor con la nueva validación, `listArticles()` detectó tres
+artículos en Terminado con marcadores `[cite: N]` y los degradó automáticamente
+a En Progreso, emitiendo avisos en el log del servidor:
+
+- `testimonios-alta-finanza-luciferina-ronald-bernard`
+- `temoignage-et-suite-affaire-ronald-bernard-haute-finance`
+- `temoignage-haute-finance-luciferienne-ronald-bernard`
+
+Los tres necesitan limpieza manual antes de poder volver a Terminado.
+
+---
+
+## [1.3.6] — 2026-09-06
+
+Arquitectura desacoplada para gestión del sitio SPIP + pestaña Sitio en el dashboard.
+
+### Añadido
+
+- `src/lib/spip-admin.mjs` — biblioteca de operaciones de administración de
+  artículos ya publicados en SPIP. Exporta tres funciones:
+  - `inspectArticleStatus(spipId)` — solo lectura; devuelve estado actual y
+    opciones disponibles del widget de estado SPIP.
+  - `changeArticleStatus(spipId, targetStatus, { dryRun? })` — cambia el estado
+    de un artículo en SPIP (prepa/prop/publie/refuse/poubelle).
+  - `permanentlyDelete(spipId, { dryRun? })` — borra permanentemente desde la
+    papelera (`exec=corbeille`).
+  - Toda operación usa `withSpipSession()` (ciclo de vida del browser centralizado)
+    y `guardedWrite()` (audit log garantizado, incluyendo el borrado permanente
+    que antes lo saltaba). No importa nada del pipeline editorial.
+
+- `src/server.mjs` — tres nuevos endpoints bajo `/api/site/*`, completamente
+  desacoplados de `/api/articles/*`:
+  - `GET  /api/site/article/:spipId/status` — inspecciona estado en SPIP
+  - `POST /api/site/article/:spipId/status` — cambia estado (body: `{ status, dryRun? }`)
+  - `POST /api/site/article/:spipId/delete` — borrado permanente (requiere estar en poubelle)
+  - Import de `spip-admin.mjs` es lazy (no carga Playwright al arrancar el servidor).
+
+- `public/index.html` + `public/app.js` — nueva pestaña **🌐 Sitio** en el nav,
+  con dos tarjetas:
+  - **Cambiar estado** — campo ID SPIP + selector de estado + botón.
+  - **Borrado permanente** — campo ID SPIP + botón con estilo de peligro.
+  - El JS de Sitio es una sección completamente aislada al final de `app.js`:
+    sus propias refs DOM, sus propias funciones, llama solo a `/api/site/*`.
+    No toca `articles`, `activeTab`, ni ninguna función del pipeline editorial.
+
+### Modificado
+
+- `src/manage-article-status.mjs` — reescrito como adaptador delgado de
+  `spip-admin.mjs` (~55 líneas vs ~280 anteriores). Ya no contiene lógica DOM,
+  no lanza Playwright directamente, no duplica el ciclo de vida del browser.
+
+- `src/permanently-delete-article.mjs` — reescrito como adaptador delgado de
+  `spip-admin.mjs` (~45 líneas vs ~110 anteriores). Ahora pasa por `guardedWrite`
+  (antes lo saltaba — era el único script de mutación SPIP sin audit log).
+
+- `public/app.js` — `setActiveTab()` y `showListView()` actualizados para manejar
+  la nueva vista `view-site` sin romper el comportamiento existente de las
+  pestañas editoriales.
+
+### Arquitectura
+
+```
+Pipeline editorial (sin cambios):
+  articles-store ← article-validator ← text-to-html
+  publish-use-case ← spip-client
+  server /api/articles/*  ←→  public/app.js (pestañas Edición/En Progreso/Terminado)
+
+Gestión del sitio (nuevo, desacoplado):
+  spip-admin ← spip-session + live-write-gateway
+  server /api/site/*  ←→  public/app.js (pestaña Sitio)
+  CLI: manage-article-status.mjs + permanently-delete-article.mjs → spip-admin
+```
+
+---
+
+## [1.3.5] — 2026-09-06
+
+Incorporación de scripts de gestión de estado y borrado permanente de artículos SPIP.
+
+### Añadido
+
+- `src/manage-article-status.mjs` — cambia el estado de un artículo en SPIP vía
+  Playwright. Dos modos: `--inspect` (muestra el estado actual y las opciones
+  disponibles) y `--change` (cambia a `prepa`, `prop`, `publie`, `refuse` o
+  `poubelle`). Incluye gate de seguridad: cambiar a `publie` directamente requiere
+  `KILO_APPROVE_PUBLISHING=true` como variable de entorno. Registra la operación
+  en `live-write-audit.log.jsonl` vía `guardedWrite()`. Portado de
+  `KILOMBO-BUILD/scripts/manage-article-status.mjs` con imports adaptados a
+  nuestra estructura (`src/lib/`).
+
+- `src/permanently-delete-article.mjs` — borra permanentemente un artículo que
+  ya está en la papelera de SPIP (`poubelle`). SPIP solo expone el borrado
+  permanente desde `ecrire/?exec=corbeille` (formulario con checkboxes
+  `elements[]` + submit `effacer`) — no hay URL directa sin token CSRF de sesión
+  activa. El script verifica que el artículo esté en la papelera antes de
+  proceder y guarda un screenshot de confirmación. Portado de
+  `KILOMBO-BUILD/scripts/permanently-delete-article.mjs`.
+
+- `package.json` — scripts `status` y `delete-article` añadidos:
+  ```
+  npm run status -- --inspect --id <id>
+  npm run status -- --change --id <id> --status poubelle
+  npm run delete-article -- --id <id>
+  ```
+
+### Contexto
+
+Necesidad surgida al publicar artículos duplicados en SPIP (IDs 119, 120) por
+fallos de write-back. El proyecto KILOMBO-BUILD ya tenía estos scripts; se portaron
+aquí para no depender de ese proyecto para operaciones de mantenimiento del sitio.
+
+Flujo de borrado permanente:
+1. `npm run status -- --change --id <id> --status poubelle`
+2. `npm run delete-article -- --id <id>`
+
+---
+
+## [1.3.4] — 2026-09-06
+
+Correcciones de bugs en el editor y el flujo de workflow.
+
+### Añadido
+
+- `src/lib/text-to-html.mjs` — nueva exportación `looksLikeStructuredPaste(text)`:
+  heurística que detecta si el texto pegado en el editor es JSON, HTML en crudo
+  u otro contenido estructurado en vez de prosa. No bloquea el guardado — un
+  borrador siempre debe poder guardarse tal como está — pero el servidor devuelve
+  un `warning` que el frontend muestra como toast para que el editor lo note
+  antes de enviar a Revisión.
+
+- `test/text-to-html.test.mjs` — casos de test añadidos para
+  `looksLikeStructuredPaste`.
+
+### Modificado
+
+- `src/server.mjs` — `PUT /api/articles/:id/draft`:
+  - Acepta y persiste el campo `section` junto con `title` y `contentHtml`.
+    Antes `section` se ignoraba en el guardado del borrador.
+  - Llama a `looksLikeStructuredPaste()` sobre el texto recibido y, si
+    detecta contenido estructurado, incluye `warning` en la respuesta JSON.
+
+- `src/server.mjs` — `POST /api/articles/:id/send-to-revision`:
+  gate ampliado para exigir también `section` (además de título y contenido)
+  antes de dejar pasar el artículo a En Progreso.
+
+- `public/app.js` — editor de Edición:
+  - Añadido `<select>` de sección (DOM ref `editorSectionSelect`) entre el
+    campo de título y el textarea de cuerpo.
+  - `openEditor()`: carga y muestra la sección del artículo al abrir el editor.
+  - `saveDraft()`: envía `section` al servidor en cada guardado; muestra el
+    `warning` del servidor como toast si está presente.
+  - `handleEditorSend()`: valida que haya sección seleccionada antes de
+    guardar y llamar a `send-to-revision` — muestra toast de error y hace
+    foco en el select si falta.
+  - Badge de estado: ahora solo se muestra en la pestaña Terminado
+    (`listo` / `publicado`). En Edición y En Progreso la celda queda vacía.
+  - Subtítulo de En Progreso cambiado de "X artículos con errores de
+    validación" a "X artículos para validar".
+
+- `public/index.html` — editor de Edición:
+  - Añadido `<select id="editor-section">` con las 6 secciones válidas del
+    schema (`general`, `tierra`, `gci`, `pi`, `nom`, `actualidad`).
+  - Añadidos estilos `.editor-section-select` consistentes con el resto del
+    editor.
+
+- `src/lib/articles-store.mjs` — `atomicWrite()` extraído como helper
+  privado compartido por `writeBack()` y `writeBackToFile()`. Sin cambio
+  de comportamiento observable.
+
+- `ROADMAP.md` — Etapa 3 actualizada con el estado real del código (flujo
+  de tres pasos ya implementado, pantalla de Edición mínima ya en código).
+  Etapa 4 reescrita con el plan de IA pipeline vía Groq en las dos
+  transiciones del workflow (Edición→En Progreso y En Progreso→Terminado).
+
+### Verificado
+
+- `npm test` — 82 tests, 0 fallos.
+
+---
+
+## [1.3.3] — 2026-09-05
+
+---
+
 ## [1.3.4] — 2026-09-06
 
 Corrección de bugs encontrados en revisión de código, y sincronización de

@@ -1,0 +1,35 @@
+{
+  "_schema_version": "1.0",
+  "id": "per-la-realidad-es-muy-diferente",
+  "language": "ES",
+  "section": "nom",
+  "surtitre": "SISTEMA PREVISIONAL Y DERECHOS",
+  "title": "PER. La realidad es muy diferente",
+  "soustitre": "Privilegios en el sistema previsional uruguayo y el reclamo por el aguinaldo",
+  "descriptif": "Reflexión sobre las diferencias en el sistema previsional uruguayo, los beneficios de la oficialidad militar y el reclamo de ONAJPU para las y los jubilados.",
+  "coverImage": {
+    "url": "https://tv.canal7salta.com/logo.png",
+    "alt": "Imagen representativa del reclamo por el aguinaldo a jubilados",
+    "caption": "Reclamo por la restitución del aguinaldo a jubilados en Uruguay",
+    "credit": "Difusión"
+  },
+  "chapo": "<p><strong>Un análisis crítico sobre las asimetrías en las jubilaciones y pensiones en Uruguay, marcadas por privilegios históricos.</strong></p>",
+  "contentHtml": "<p>Hasta el momento, los únicos privilegiados en el sistema previsional uruguayo siguen siendo los militares, muy especialmente la oficialidad. Son los únicos que tienen aguinaldo. Una herencia del pasado reciente que esta democracia no ha podido superar.</p><p>El reclamo de la <a href=\"https://www.facebook.com/ONAJPU/\" target=\"_blank\">Organización Nacional de Asociaciones de Jubilados y Pensionistas del Uruguay (ONAJPU)</a> de restituir el aguinaldo a las y a los jubilados tiene plena vigencia. Mientras el debate sobre el presupuesto sigue en boca de todos, las diferencias entre regímenes vuelven a poner la lupa sobre quiénes pagan los costos y quiénes mantienen los beneficios de siempre.</p>",
+  "ps": "<p>Nota breve de opinión sobre el sistema previsional uruguayo.</p>",
+  "author": "Anónimo / Colaborador",
+  "sourceSite": "Publicación de opinión",
+  "sourceUrl": "",
+  "sourceDate": "2026-08-14",
+  "date": "2026-09-06",
+  "topics": [
+    "uruguay",
+    "pensiones",
+    "onajpu",
+    "jubilaciones"
+  ],
+  "status": "prepa",
+  "spipArticleId": "123",
+  "publishedAt": "2026-09-06T04:59:13.500Z",
+  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=123",
+  "workflowStatus": "terminado"
+}

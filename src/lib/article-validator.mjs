@@ -106,6 +106,14 @@ function validateHtml(html, fieldName) {
     errors.push(`${fieldName}: hay imágenes <img> sin atributo alt`);
   }
 
+  // Marcadores de cita AI ([cite: N]) — artefactos del asistente de escritura
+  // que se publicarían como texto literal en el sitio si no se eliminan.
+  if (/\[cite:\s*\d+\]/i.test(html)) {
+    errors.push(
+      `${fieldName}: contiene marcadores de cita AI ([cite: N]) que se publicarían como texto literal — eliminarlos antes de publicar`
+    );
+  }
+
   return errors;
 }
 
@@ -253,6 +261,32 @@ export function validateArticle(article) {
   }
 
   return errors;
+}
+
+/**
+ * Devuelve los campos del artículo que están definidos en el schema pero que
+ * spip-client.mjs todavía no escribe en SPIP. Es la fuente de verdad única
+ * para el aviso de campos no implementados — publish-article.mjs la llama
+ * en lugar de mantener su propia lista duplicada.
+ *
+ * Vive aquí (article-validator.mjs) en vez de en spip-client.mjs para que
+ * --validate-only y el servidor puedan llamarla sin cargar Playwright.
+ * spip-client.mjs re-exporta esta función para compatibilidad.
+ *
+ * Cuando se implemente un campo en performCreate(), quitarlo de aquí.
+ *
+ * @param {object} article - artículo validado
+ * @returns {string[]} lista de descripciones de campos no implementados
+ */
+export function getUnimplementedFields(article) {
+  const fields = [];
+  if (article.coverImage) fields.push('coverImage (imagen destacada)');
+  if (Array.isArray(article.topics) && article.topics.length > 0) {
+    fields.push('topics (mots-clés)');
+  }
+  if (article.author) fields.push('author');
+  if (article.date) fields.push('date (fecha del artículo)');
+  return fields;
 }
 
 /**
