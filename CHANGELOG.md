@@ -5,96 +5,58 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
-## [1.3.14] — 2026-09-07
+## [1.3.14] — 2026-09-08
 
-Una sesión Playwright para todas las verificaciones + idempotencia en logExternalDeletion.
-
-### Corregido
-
-- `src/lib/spip-admin.mjs` — nueva función exportada `verifyDuplicates(spipIds)`.
-  Abre **una sola sesión Playwright**, hace login una vez, y navega a cada artículo
-  con el mismo `page` en lugar de lanzar un browser por ID. Retorna un
-  `Map<spipId, { exists: boolean|null, error?: string }>`:
-  - `exists: true` — widget encontrado, artículo existe
-  - `exists: false` — widget ausente (genuinamente borrado)
-  - `exists: null` — error de navegación/timeout, no verificable
-
-  Cada navegación dentro de la sesión tiene un timeout de 30s independiente.
-  Si una falla, las demás continúan en el mismo browser.
-
-- `src/server.mjs` — el bloque `?verify=true` ahora:
-  1. Recopila todos los IDs sobrantes (no canónicos) de todos los grupos de
-     duplicados en una sola lista.
-  2. Llama a `verifyDuplicates()` una vez — un login para todo el lote.
-  3. Aplica el mapa de resultados de vuelta a cada grupo.
-
-  Antes: N logins secuenciales (uno por ID sobrante), cada uno con un browser
-  completo + handshake SSO. Ahora: 1 login + N navegaciones en la misma página.
-
-- `src/server.mjs` — `logExternalDeletion()` es ahora idempotente: antes de
-  escribir, lee el log y verifica si ya existe una entrada
-  `article.delete.permanent` para el mismo ID. Si ya existe, no añade nada.
-  Antes, cada click en "Verificar en SPIP" con un artículo confirmado-borrado
-  añadía una nueva entrada duplicada al log.
+Refactor: la verificación de duplicados en SPIP vuelve a respetar la
+arquitectura del proyecto (punto único de control de escrituras + capa de
+lógica separada de las rutas HTTP).
 
 ### Contexto
 
-Estos dos factores amplifican el bug de 1.3.13 (cualquier error tratado como
-"confirmado borrado"):
+`?verify=true` (1.3.12) escribía directamente al audit log desde
+`server.mjs` (`fs.appendFileSync` + una copia propia de `AUDIT_LOG_PATH`),
+sin pasar por `guardedWrite()` — el "punto único de control" que
+`live-write-gateway.mjs` documenta como obligatorio para toda escritura.
+Además, cualquier error de `inspectArticleStatus()` (login fallido, timeout,
+cambio de layout de SPIP) se trataba igual que "el artículo no existe",
+y ese resultado se persistía de inmediato y para siempre — sin distinción
+de confianza ni confirmación humana.
 
-1. Los múltiples logins secuenciales multiplicaban la probabilidad de un fallo
-   transitorio — cuantos más IDs a verificar, más chances de un timeout o
-   redirección de sesión a mitad del loop.
-2. Sin idempotencia, cada click repetido mientras el fallo persistiera añadía
-   otra entrada permanente al audit log, sin forma de saberlo salvo inspeccionando
-   el `.jsonl` a mano.
+### Cambiado
 
-Con la sesión única y la idempotencia, ambas condiciones quedan cerradas.
+- `src/lib/spip-admin.mjs` — la lógica de verificación se extrae de
+  `server.mjs` a tres funciones nuevas, siguiendo el mismo patrón de
+  `publish-use-case.mjs` (lógica pura + seams de inyección para tests):
+  - `checkArticlesExist(spipIds, seams?)` — **una sola sesión SPIP** (un solo
+    login) para todos los IDs, en vez de una sesión por ID. Un fallo de login
+    se propaga como error de la operación completa, no se malinterpreta como
+    "todos estos IDs no existen".
+  - `verifyDuplicatesInSpip(duplicates, seams?)` — orquesta lo anterior sobre
+    un `report.duplicates`. **Solo lectura**: nunca escribe al audit log. Un
+    ID no verificable (Map sin esa entrada) se trata como "sigue vivo"
+    (fail-safe), no como confirmado ausente.
+  - `confirmExternalDeletion(spipId)` — única función que persiste una
+    "borrado externo", y pasa por `guardedWrite()` correctamente. Requiere
+    una llamada explícita — ver endpoint nuevo abajo.
+- `src/server.mjs` — la ruta `?verify=true` ahora solo llama a
+  `verifyDuplicatesInSpip()`; se eliminan `logExternalDeletion()`, el import
+  de `fs` y la copia local de `AUDIT_LOG`.
+- `public/app.js` + `public/index.html` — cada entrada marcada "ya no existe
+  en SPIP" ahora muestra un botón **"Confirmar borrado"** con su propio gate
+  de confirmación (`confirm()`, mismo patrón que "Borrado permanente"),
+  llamando al endpoint nuevo. La verificación en sí ya no tiene efectos
+  secundarios permanentes.
 
----
+### Añadido
 
-## [1.3.13] — 2026-09-07
-
-Corrección de bug crítico: "Verificar en SPIP" no distinguía artículo borrado de fallo transitorio.
-
-### Corregido
-
-- `src/lib/spip-admin.mjs` — añadida clase exportada `ArticleNotFoundError`.
-  Solo se lanza cuando la página del artículo se cargó correctamente pero el
-  widget `.statut_actuel` está ausente — la forma que tiene SPIP de indicar que
-  el artículo no existe. Todos los demás fallos (login, timeout, red) siguen
-  lanzando `Error` genérico.
-
-  `readStatusWidget()` ahora devuelve `{ notFound: true }` junto con `error`
-  cuando el widget falta. `inspectArticleStatus()` lanza `ArticleNotFoundError`
-  solo para ese caso.
-
-- `src/server.mjs` — el bloque `catch` del loop de verificación ahora distingue:
-  - `ArticleNotFoundError` → confirmado borrado → `spipExists: false` →
-    `logExternalDeletion()` → entrada permanente en el audit log.
-  - Cualquier otro error → `spipExists: null` → aviso en el log del servidor →
-    **no** se escribe nada en el audit log.
-
-  `resolvedInSpip` ahora solo es `true` si todos los IDs sobrantes tienen
-  `spipExists === false` (confirmado), no `null` (no verificable).
-
-- `public/app.js` — entradas con `spipExists === null` se muestran como
-  "⚠️ no se pudo verificar" con el mensaje de error en tooltip, en vez de
-  aparecer como si el artículo estuviera borrado.
-
-### Por qué era grave
-
-El bug original causaba corrupción permanente del audit log:
-
-1. Un fallo transitorio de Playwright (timeout, login fallido, red caída)
-   durante "Verificar en SPIP" escribía `article.delete.permanent` para el
-   ID en cuestión.
-2. `auditLogReport()` lee ese log en cada carga y añade ese ID a
-   `permanentlyDeletedSpipIds`.
-3. Cualquier `article.create` con ese ID queda excluido **para siempre** de
-   todos los reportes futuros — el artículo desaparece silenciosamente del
-   panel de auditoría sin haber sido borrado realmente.
-4. La única recuperación era editar manualmente el `.jsonl` gitignoreado.
+- `POST /api/site/duplicates/:spipId/confirm-deleted` — endpoint para el
+  botón de confirmación manual descrito arriba.
+- `test/spip-admin.test.mjs` — 7 tests nuevos para `checkArticlesExist()` y
+  `verifyDuplicatesInSpip()` (sesión única, fail-safe ante "no verificado",
+  el canónico nunca se envía a verificar, un fallo de login no se confunde
+  con "no existe"). `confirmExternalDeletion()` queda fuera del alcance de
+  los tests unitarios — escribe de verdad vía `guardedWrite()`, igual que
+  `changeArticleStatus()`/`permanentlyDelete()`.
 
 ---
 

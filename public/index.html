@@ -657,7 +657,7 @@
     .audit-badge { font-size: 0.72rem; border-radius: 999px; padding: 0.1rem 0.5rem; font-weight: 600; }
     .audit-badge-canon { background: rgba(52,211,153,0.15); color: #34d399; }
 
-    .audit-btn-papelera, .audit-btn-recover {
+    .audit-btn-papelera, .audit-btn-recover, .audit-btn-confirm-deleted {
       border: none;
       border-radius: var(--radius);
       font: inherit;
@@ -670,7 +670,9 @@
     .audit-btn-papelera:hover { background: rgba(251,191,36,0.25); }
     .audit-btn-recover { background: rgba(96,165,250,0.15); color: #60a5fa; }
     .audit-btn-recover:hover { background: rgba(96,165,250,0.25); }
-    .audit-btn-papelera:disabled, .audit-btn-recover:disabled { opacity: 0.45; cursor: not-allowed; }
+    .audit-btn-confirm-deleted { background: rgba(107,114,128,0.15); color: #9ca3af; margin-left: 0.4rem; }
+    .audit-btn-confirm-deleted:hover { background: rgba(107,114,128,0.25); color: #d1d5db; }
+    .audit-btn-papelera:disabled, .audit-btn-recover:disabled, .audit-btn-confirm-deleted:disabled { opacity: 0.45; cursor: not-allowed; }
 
     .audit-inline-result { font-size: 0.8rem; margin-left: 0.4rem; }
     .audit-inline-result.ok { color: #34d399; }

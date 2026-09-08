@@ -1152,16 +1152,19 @@ function renderAuditReport(report) {
       list.className = 'audit-spip-list';
       for (const entry of group.aliveEntries) {
         const li = document.createElement('li');
-        const isCanon      = canonical && String(entry.spipArticleId) === String(canonical);
-        const spipGone     = group.verifiedInSpip && entry.spipExists === false;
-        const spipUnknown  = group.verifiedInSpip && entry.spipExists === null;
+        const isCanon  = canonical && String(entry.spipArticleId) === String(canonical);
+        const spipGone = group.verifiedInSpip && entry.spipExists === false;
         li.innerHTML = `SPIP #<strong>${entry.spipArticleId}</strong> — ${fmtTs(entry.loggedAt)}`;
         if (isCanon) {
           li.innerHTML += ' <span class="audit-badge audit-badge-canon">canónico</span>';
         } else if (spipGone) {
-          li.innerHTML += ' <span class="audit-spip-gone">ya no existe en SPIP ✓</span>';
-        } else if (spipUnknown) {
-          li.innerHTML += ` <span class="audit-spip-gone" title="${escHtml(entry.verifyError ?? '')}">⚠️ no se pudo verificar</span>`;
+          li.innerHTML += ' <span class="audit-spip-gone">ya no existe en SPIP</span>';
+          const confirmBtn = document.createElement('button');
+          confirmBtn.className = 'audit-btn-confirm-deleted';
+          confirmBtn.textContent = `Confirmar borrado de #${entry.spipArticleId}`;
+          confirmBtn.title = 'Revisá manualmente en SPIP antes de confirmar — esto es permanente.';
+          confirmBtn.addEventListener('click', () => handleConfirmExternalDeletion(entry.spipArticleId, confirmBtn));
+          li.appendChild(confirmBtn);
         } else {
           const btn = document.createElement('button');
           btn.className = 'audit-btn-papelera';
@@ -1283,6 +1286,41 @@ async function handleMoveToPapelera(spipId, btn) {
   } catch (err) {
     btn.disabled = false;
     btn.textContent = `Mover #${spipId} a papelera`;
+    showToast(`❌ Error de red: ${err.message}`, 'error');
+  }
+}
+
+async function handleConfirmExternalDeletion(spipId, btn) {
+  // Gate de confirmación — esto es permanente e irreversible (ver spip-admin.mjs
+  // confirmExternalDeletion). La verificación en vivo es un indicio, no una
+  // prueba; por eso pedimos que un humano lo revise antes de confirmar.
+  const confirmed = confirm(
+    `⚠️  Confirmar que el artículo SPIP #${spipId} fue borrado externamente.\n\n` +
+    `Esto es PERMANENTE: el ID se excluirá de todos los reportes de duplicados ` +
+    `futuros, incluso sin verificar. Recomendado: revisá manualmente en SPIP ` +
+    `(/ecrire/?exec=article&id_article=${spipId}) antes de confirmar.\n\n` +
+    `¿Continuar?`
+  );
+  if (!confirmed) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Confirmando…';
+  try {
+    const res  = await fetch(`/api/site/duplicates/${encodeURIComponent(spipId)}/confirm-deleted`, {
+      method: 'POST',
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`✅ SPIP #${spipId} confirmado como borrado externamente.`, 'success', 6000);
+      await loadAuditReport();
+    } else {
+      btn.disabled = false;
+      btn.textContent = `Confirmar borrado de #${spipId}`;
+      showToast(`❌ ${data.error ?? 'Error desconocido'}`, 'error');
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = `Confirmar borrado de #${spipId}`;
     showToast(`❌ Error de red: ${err.message}`, 'error');
   }
 }

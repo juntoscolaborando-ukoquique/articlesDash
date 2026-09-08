@@ -20,6 +20,11 @@
  *   permanentlyDelete(spipId, { dryRun? })
  *   inspectArticleStatus(spipId)
  *   auditLogReport()
+ *   checkArticlesExist(spipIds)               — solo lectura, una sesión compartida
+ *   verifyDuplicatesInSpip(duplicates, seams?) — orquesta checkArticlesExist sobre
+ *                                                 un report.duplicates; NO escribe nada
+ *   confirmExternalDeletion(spipId)            — única función que persiste una
+ *                                                 "borrado externo" (pasa por guardedWrite)
  *
  * ESTADOS SPIP VÁLIDOS:
  *   prepa    — En curso de redacción
@@ -39,19 +44,6 @@ import { listArticles } from './articles-store.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const AUDIT_LOG_PATH = path.join(PROJECT_ROOT, 'live-write-audit.log.jsonl');
-
-/**
- * Error específico para cuando un artículo no existe en SPIP.
- * Distingue "genuinamente borrado" de otros fallos de Playwright
- * (timeout, login failure, red caída) que no deben tratarse como borrado.
- */
-export class ArticleNotFoundError extends Error {
-  constructor(spipId) {
-    super(`Artículo ${spipId} no encontrado en SPIP (widget de estado ausente)`);
-    this.name = 'ArticleNotFoundError';
-    this.spipId = spipId;
-  }
-}
 
 export const VALID_SPIP_STATUSES = {
   prepa:    'En curso de redacción',
@@ -73,7 +65,7 @@ export const VALID_SPIP_STATUSES = {
 async function readStatusWidget(page) {
   return page.evaluate(() => {
     const statusBox = document.querySelector('.statut_actuel');
-    if (!statusBox) return { error: 'Widget de estado no encontrado en la página', notFound: true };
+    if (!statusBox) return { error: 'Widget de estado no encontrado en la página' };
 
     const labelEl = statusBox.querySelector('.statut-label');
     const currentStatus = labelEl ? labelEl.textContent.trim() : 'desconocido';
@@ -168,10 +160,7 @@ export async function inspectArticleStatus(spipId) {
   return withSpipSession(
     async (page) => {
       const result = await readStatusWidget(page);
-      if (result.error) {
-        if (result.notFound) throw new ArticleNotFoundError(spipId);
-        throw new Error(result.error);
-      }
+      if (result.error) throw new Error(result.error);
       return result;
     },
     { targetUrl, expectedUrlIncludes: 'exec=article' }
@@ -179,50 +168,130 @@ export async function inspectArticleStatus(spipId) {
 }
 
 /**
- * Verifica en una sola sesión Playwright si una lista de IDs SPIP sobrantes
- * (no canónicos) siguen existiendo en el sitio. Abre el browser una sola vez,
- * navega a cada artículo con el mismo page, y cierra la sesión al terminar.
+ * Verifica en una ÚNICA sesión SPIP (un solo login, no uno por ID) si cada
+ * uno de los IDs dados sigue existiendo. Heurística: el widget de estado
+ * (`.statut_actuel`) presente en la página de edición del artículo.
  *
- * Retorna un Map<spipId, { exists: boolean|null, error?: string }>:
- *   exists: true  → artículo encontrado en SPIP
- *   exists: false → confirmado ausente (ArticleNotFoundError)
- *   exists: null  → no se pudo verificar (error de red, timeout, etc.)
+ * IMPORTANTE — esto es un indicio, no una prueba: un cambio de layout de SPIP,
+ * una carga lenta, o cualquier problema transitorio de red dan el mismo
+ * resultado (`false`) que un artículo genuinamente inexistente, porque no
+ * tenemos forma verificada de distinguir "objeto no encontrado" de "la página
+ * no cargó bien" sin conocer el markup exacto que devuelve esta instancia de
+ * SPIP en cada caso. Por eso el resultado de esta función NUNCA se escribe
+ * solo — ver verifyDuplicatesInSpip() (de lectura) y confirmExternalDeletion()
+ * (la única que persiste, y requiere una acción humana explícita).
  *
- * @param {string[]} spipIds — IDs a verificar (sin el canónico)
- * @returns {Promise<Map<string, { exists: boolean|null, error?: string }>>}
+ * Si el login mismo falla (contraseña incorrecta, SPIP caído, etc.), la
+ * excepción se propaga sin capturar — es un fallo de la sesión completa, no
+ * de un ID puntual, y no debe malinterpretarse como "todos estos IDs no
+ * existen".
+ *
+ * @param {Array<string|number>} spipIds
+ * @param {object} [seams] — inyección de dependencias para tests
+ * @param {Function} [seams._withSpipSession] — default: withSpipSession real
+ * @returns {Promise<Map<string, boolean>>} spipId (string) → existe (boolean).
+ *   Un ID cuya navegación individual falla (no el login) queda ausente del
+ *   Map — "no verificado", distinto de `false` ("confirmado ausente").
  */
-export async function verifyDuplicates(spipIds) {
-  if (spipIds.length === 0) return new Map();
+export async function checkArticlesExist(spipIds, { _withSpipSession = withSpipSession } = {}) {
+  const results = new Map();
+  if (spipIds.length === 0) return results;
 
-  // Usar el primer ID como targetUrl para el login inicial
-  const firstUrl = `${BASE_URL}/ecrire/?exec=article&id_article=${spipIds[0]}`;
-  const results  = new Map();
-
-  await withSpipSession(
+  await _withSpipSession(
     async (page) => {
-      for (const spipId of spipIds) {
-        const url = `${BASE_URL}/ecrire/?exec=article&id_article=${spipId}`;
+      for (const id of spipIds) {
+        const url = `${BASE_URL}/ecrire/?exec=article&id_article=${id}`;
         try {
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          await page.waitForTimeout(800);
-          const widget = await readStatusWidget(page);
-          if (widget.notFound) {
-            results.set(String(spipId), { exists: false });
-          } else if (widget.error) {
-            results.set(String(spipId), { exists: null, error: widget.error });
-          } else {
-            results.set(String(spipId), { exists: true });
-          }
-        } catch (err) {
-          // Error de navegación/timeout — no se puede confirmar ausencia
-          results.set(String(spipId), { exists: null, error: err.message });
+          await page.goto(url, { waitUntil: 'domcontentloaded' });
+          const result = await readStatusWidget(page);
+          results.set(String(id), !result.error);
+        } catch {
+          // Fallo puntual de navegación para este ID — no se pudo verificar,
+          // se omite del Map en vez de asumir cualquier resultado.
         }
       }
     },
-    { targetUrl: firstUrl, expectedUrlIncludes: 'exec=article' }
+    { targetUrl: `${BASE_URL}/ecrire/?exec=article&id_article=${spipIds[0]}`, expectedUrlIncludes: 'exec=article' }
   );
 
   return results;
+}
+
+/**
+ * Cruza `duplicates` (de auditLogReport()) contra SPIP en vivo. Anota cada
+ * entrada sobrante con `spipExists` y cada grupo con `resolvedInSpip`.
+ *
+ * SOLO LECTURA — a diferencia de una versión anterior de esta función, NO
+ * escribe nada en el audit log. Un ID que aparece como "no existe" es una
+ * observación de esta sesión, recalculada en cada llamada; no se persiste
+ * hasta que un humano lo confirme explícitamente vía confirmExternalDeletion().
+ * Esto evita que un falso positivo transitorio (ver checkArticlesExist) se
+ * convierta en un registro permanente e irreversible.
+ *
+ * @param {Array} duplicates — report.duplicates de auditLogReport() (se muta in-place y se retorna)
+ * @param {object} [seams] — inyección de dependencias para tests
+ * @param {Function} [seams._checkArticlesExist] — default: checkArticlesExist real
+ * @returns {Promise<Array>}
+ */
+export async function verifyDuplicatesInSpip(duplicates, { _checkArticlesExist = checkArticlesExist } = {}) {
+  const idsToCheck = [];
+  for (const dup of duplicates) {
+    for (const entry of dup.aliveEntries) {
+      if (String(entry.spipArticleId) !== String(dup.suggestedCanonical)) {
+        idsToCheck.push(entry.spipArticleId);
+      }
+    }
+  }
+
+  const existsById = await _checkArticlesExist(idsToCheck);
+
+  for (const dup of duplicates) {
+    const canonical = dup.suggestedCanonical;
+    dup.aliveEntries = dup.aliveEntries.map((entry) => {
+      if (String(entry.spipArticleId) === String(canonical)) {
+        return { ...entry, spipExists: true };
+      }
+      const exists = existsById.get(String(entry.spipArticleId));
+      // exists === false → confirmado ausente por checkArticlesExist.
+      // undefined (no verificado) o true → se trata como "sigue vivo" (fail-safe:
+      // nunca se cuenta como resuelto sin una señal positiva de ausencia).
+      return { ...entry, spipExists: exists !== false };
+    });
+    dup.verifiedInSpip = true;
+    const stillAlive = dup.aliveEntries.filter(
+      (e) => String(e.spipArticleId) !== String(canonical) && e.spipExists
+    );
+    dup.resolvedInSpip = stillAlive.length === 0;
+  }
+
+  return duplicates;
+}
+
+/**
+ * Registra de forma PERMANENTE que un artículo fue confirmado ausente en SPIP
+ * (borrado manualmente o por un script externo). A diferencia de
+ * verifyDuplicatesInSpip() (observación efímera, solo lectura), esto excluye
+ * el ID de todos los futuros auditLogReport() para siempre — por eso requiere
+ * una acción humana explícita (botón "Confirmar borrado" en el dashboard, tras
+ * revisar el resultado de la verificación) en vez de dispararse solo.
+ *
+ * Pasa por guardedWrite() — el punto único de control para toda escritura al
+ * audit log — en vez de escribir el archivo directamente.
+ *
+ * @param {string|number} spipId
+ * @returns {Promise<{success: boolean}>}
+ */
+export async function confirmExternalDeletion(spipId) {
+  await guardedWrite({
+    action: 'article.delete.permanent',
+    script: 'server.mjs/confirm-external-deletion',
+    target: { id: String(spipId) },
+    dryRun: false,
+    execute: async () => ({
+      note: 'Confirmado ausente en SPIP por revisión humana (verificación + confirmación manual, no automático).',
+    }),
+  });
+  return { success: true };
 }
 
 /**
