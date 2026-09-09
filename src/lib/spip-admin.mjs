@@ -38,8 +38,18 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { guardedWrite } from './live-write-gateway.mjs';
-import { withSpipSession, BASE_URL, DEFAULT_ENV_PATH } from './spip-session.mjs';
 import { listArticles } from './articles-store.mjs';
+
+// spip-session.mjs does `import { chromium } from 'playwright'` at the top
+// level. Importing it statically here would force Playwright to be installed
+// even to call pure functions like auditLogReport() or to run unit tests with
+// injected seams. The dynamic import below means Playwright is only resolved
+// when a function that actually needs a browser is called.
+let _spipSession = null;
+async function getSpipSession() {
+  if (!_spipSession) _spipSession = await import('./spip-session.mjs');
+  return _spipSession;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
@@ -156,6 +166,7 @@ async function applyStatusChange(page, targetStatus, dryRun) {
  * @throws si el login falla o el widget no se encuentra
  */
 export async function inspectArticleStatus(spipId) {
+  const { withSpipSession, BASE_URL } = await getSpipSession();
   const targetUrl = `${BASE_URL}/ecrire/?exec=article&id_article=${spipId}`;
   return withSpipSession(
     async (page) => {
@@ -193,14 +204,25 @@ export async function inspectArticleStatus(spipId) {
  *   Un ID cuya navegación individual falla (no el login) queda ausente del
  *   Map — "no verificado", distinto de `false` ("confirmado ausente").
  */
-export async function checkArticlesExist(spipIds, { _withSpipSession = withSpipSession } = {}) {
+export async function checkArticlesExist(spipIds, { _withSpipSession, _baseUrl } = {}) {
   const results = new Map();
   if (spipIds.length === 0) return results;
 
-  await _withSpipSession(
+  // Only load spip-session (which loads Playwright) if no session seam is
+  // provided. A caller that injects `_withSpipSession` never actually needs
+  // the real BASE_URL either — its fake session ignores the constructed
+  // URL — so we must not fall back to getSpipSession() for it, or we'd pull
+  // Playwright back in anyway.
+  // 'https://www.kilombo.top' mirrors the literal already in live-write-gateway.mjs
+  // for the same reason.
+  const { withSpipSession, BASE_URL } = _withSpipSession ? {} : await getSpipSession();
+  const withSession = _withSpipSession ?? withSpipSession;
+  const baseUrl     = _baseUrl ?? BASE_URL ?? 'https://www.kilombo.top';
+
+  await withSession(
     async (page) => {
       for (const id of spipIds) {
-        const url = `${BASE_URL}/ecrire/?exec=article&id_article=${id}`;
+        const url = `${baseUrl}/ecrire/?exec=article&id_article=${id}`;
         try {
           await page.goto(url, { waitUntil: 'domcontentloaded' });
           const result = await readStatusWidget(page);
@@ -211,7 +233,7 @@ export async function checkArticlesExist(spipIds, { _withSpipSession = withSpipS
         }
       }
     },
-    { targetUrl: `${BASE_URL}/ecrire/?exec=article&id_article=${spipIds[0]}`, expectedUrlIncludes: 'exec=article' }
+    { targetUrl: `${baseUrl}/ecrire/?exec=article&id_article=${spipIds[0]}`, expectedUrlIncludes: 'exec=article' }
   );
 
   return results;
@@ -311,6 +333,7 @@ export async function changeArticleStatus(spipId, targetStatus, { dryRun = false
     );
   }
 
+  const { withSpipSession, BASE_URL } = await getSpipSession();
   const targetUrl = `${BASE_URL}/ecrire/?exec=article&id_article=${spipId}`;
 
   return withSpipSession(
@@ -339,7 +362,7 @@ export async function changeArticleStatus(spipId, targetStatus, { dryRun = false
  * @throws si el login falla o el artículo no está en la papelera
  */
 export async function permanentlyDelete(spipId, { dryRun = false } = {}) {
-  // Login vía página de artículo para establecer la sesión SPIP
+  const { withSpipSession, BASE_URL } = await getSpipSession();
   const targetUrl = `${BASE_URL}/ecrire/?exec=article&id_article=${spipId}`;
 
   return withSpipSession(
