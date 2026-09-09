@@ -48,6 +48,40 @@ const PORT = portArg ? parseInt(portArg.split('=')[1], 10) : 3000;
 
 const publishingInProgress = new Set();
 
+// ── Shared route helpers ─────────────────────────────────────────────────────
+//
+// Express 4 does NOT catch a rejected promise thrown from an async route
+// handler — an error thrown outside a route's own try/catch (e.g. loadArticle()
+// before its try block, as several routes below used to do) leaves the request
+// hanging with no response at all, instead of a 500. asyncHandler() closes that
+// gap by wrapping every route body in one try/catch, and also centralizes the
+// "log the error, respond 500 with its message" boilerplate every route used
+// to repeat by hand.
+//
+// loadArticleOr404() covers the load-or-404 guard that opens almost every
+// /api/articles/:id/* route. If it returns null, the response is already
+// sent (404) and the caller should just `return`.
+
+function asyncHandler(label, handler) {
+  return async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (err) {
+      console.error(`[${label}]`, err);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    }
+  };
+}
+
+function loadArticleOr404(id, res) {
+  const article = loadArticle(id);
+  if (!article) {
+    res.status(404).json({ error: 'Artículo no encontrado' });
+    return null;
+  }
+  return article;
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 const app = express();
@@ -56,89 +90,63 @@ app.use(express.static(PUBLIC_DIR));
 
 // ── API: lista de artículos ───────────────────────────────────────────────────
 
-app.get('/api/articles', (_req, res) => {
-  try {
-    const articles = listArticles();
-    res.json({ articles });
-  } catch (err) {
-    console.error('[GET /api/articles]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+app.get('/api/articles', asyncHandler('GET /api/articles', async (_req, res) => {
+  const articles = listArticles();
+  res.json({ articles });
+}));
 
 // ── API: crear artículo nuevo (borrador vacío en Edición) ────────────────────
 //
 // "Nuevo artículo" del dashboard. Sin gate de validación — un borrador
 // recién nacido nunca es válido y no tiene por qué serlo.
 
-app.post('/api/articles', (req, res) => {
-  try {
-    const title = typeof req.body?.title === 'string' ? req.body.title : '';
-    const article = createDraftArticle({ title });
-    return res.status(201).json({ article });
-  } catch (err) {
-    console.error('[POST /api/articles]', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
+app.post('/api/articles', asyncHandler('POST /api/articles', async (req, res) => {
+  const title = typeof req.body?.title === 'string' ? req.body.title : '';
+  const article = createDraftArticle({ title });
+  res.status(201).json({ article });
+}));
 
 // ── API: detalle de artículo ──────────────────────────────────────────────────
 
-app.get('/api/articles/:id', (req, res) => {
-  try {
-    const article = loadArticle(req.params.id);
-    if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
-    res.json({ article });
-  } catch (err) {
-    console.error('[GET /api/articles/:id]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+app.get('/api/articles/:id', asyncHandler('GET /api/articles/:id', async (req, res) => {
+  const article = loadArticleOr404(req.params.id, res);
+  if (!article) return;
+  res.json({ article });
+}));
 
 // ── API: desaprobar artículo (Terminado → En Progreso) ────────────────────────
 //
 // Sin gate de validación — mandar un artículo a "en-progreso" siempre debe
 // poder hacerse, esté válido o no. No toca SPIP ni spipArticleId.
 
-app.post('/api/articles/:id/demote', (req, res) => {
+app.post('/api/articles/:id/demote', asyncHandler('POST /api/articles/:id/demote', async (req, res) => {
   const { id } = req.params;
-  try {
-    const article = loadArticle(id);
-    if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
+  if (!loadArticleOr404(id, res)) return;
 
-    demoteToEnProgreso(id);
-    return res.json({ success: true, workflowStatus: 'en-progreso' });
-  } catch (err) {
-    console.error('[POST /api/articles/:id/demote]', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
+  demoteToEnProgreso(id);
+  res.json({ success: true, workflowStatus: 'en-progreso' });
+}));
 
 // ── API: aprobar artículo (En Progreso → Terminado) ───────────────────────────
 //
 // Gateado por validateArticle: solo se puede aprobar si el artículo es válido.
 // No toca SPIP ni spipArticleId.
 
-app.post('/api/articles/:id/promote', (req, res) => {
+app.post('/api/articles/:id/promote', asyncHandler('POST /api/articles/:id/promote', async (req, res) => {
   const { id } = req.params;
-  try {
-    const article = loadArticle(id);
-    if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
+  const article = loadArticleOr404(id, res);
+  if (!article) return;
 
-    const errors = validateArticle(article);
-    if (errors.length > 0) {
-      return res.status(422).json({
-        error: 'El artículo no pasa la validación y no puede ser aprobado.',
-        validationErrors: errors,
-      });
-    }
-    promoteToTerminado(id);
-    return res.json({ success: true, workflowStatus: 'terminado' });
-  } catch (err) {
-    console.error('[POST /api/articles/:id/promote]', err);
-    return res.status(500).json({ error: err.message });
+  const errors = validateArticle(article);
+  if (errors.length > 0) {
+    return res.status(422).json({
+      error: 'El artículo no pasa la validación y no puede ser aprobado.',
+      validationErrors: errors,
+    });
   }
-});
+  promoteToTerminado(id);
+  res.json({ success: true, workflowStatus: 'terminado' });
+}));
 
 // ── API: guardar borrador (título + texto libre) mientras está en Edición ────
 //
@@ -146,51 +154,40 @@ app.post('/api/articles/:id/promote', (req, res) => {
 // de forma centralizada, en el HTML restringido que exige contentHtml.
 // No toca workflowStatus — guardar nunca cambia de etapa.
 
-app.put('/api/articles/:id/draft', (req, res) => {
+app.put('/api/articles/:id/draft', asyncHandler('PUT /api/articles/:id/draft', async (req, res) => {
   const { id } = req.params;
-  try {
-    const article = loadArticle(id);
-    if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
+  const article = loadArticleOr404(id, res);
+  if (!article) return;
 
-    const title = typeof req.body?.title === 'string' ? req.body.title : article.title;
-    const section = typeof req.body?.section === 'string' ? req.body.section : article.section;
-    const text = typeof req.body?.text === 'string' ? req.body.text : '';
-    const contentHtml = textToParagraphHtml(text);
+  const title = typeof req.body?.title === 'string' ? req.body.title : article.title;
+  const section = typeof req.body?.section === 'string' ? req.body.section : article.section;
+  const text = typeof req.body?.text === 'string' ? req.body.text : '';
+  const contentHtml = textToParagraphHtml(text);
 
-    writeBack(id, { title, section, contentHtml });
+  writeBack(id, { title, section, contentHtml });
 
-    // No bloquea el guardado — un borrador siempre debe poder guardarse tal
-    // como está — pero avisa si el texto pegado parece JSON/markup en vez de
-    // prosa, para que un humano lo note antes de mandarlo a Revisión.
-    const warning = looksLikeStructuredPaste(text)
-      ? 'El texto pegado parece JSON o HTML en crudo, no prosa. Revisar antes de enviar a Revisión.'
-      : undefined;
+  // No bloquea el guardado — un borrador siempre debe poder guardarse tal
+  // como está — pero avisa si el texto pegado parece JSON/markup en vez de
+  // prosa, para que un humano lo note antes de mandarlo a Revisión.
+  const warning = looksLikeStructuredPaste(text)
+    ? 'El texto pegado parece JSON o HTML en crudo, no prosa. Revisar antes de enviar a Revisión.'
+    : undefined;
 
-    return res.json({ success: true, ...(warning ? { warning } : {}) });
-  } catch (err) {
-    console.error('[PUT /api/articles/:id/draft]', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
+  res.json({ success: true, ...(warning ? { warning } : {}) });
+}));
 
 // ── API: enviar a Edición (En Progreso → Edición) ─────────────────────────────
 //
 // Sin gate — mandar un artículo a reescribir siempre debe poder hacerse,
 // esté como esté. No toca SPIP ni spipArticleId.
 
-app.post('/api/articles/:id/send-to-edicion', (req, res) => {
+app.post('/api/articles/:id/send-to-edicion', asyncHandler('POST /api/articles/:id/send-to-edicion', async (req, res) => {
   const { id } = req.params;
-  try {
-    const article = loadArticle(id);
-    if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
+  if (!loadArticleOr404(id, res)) return;
 
-    sendToEdicion(id);
-    return res.json({ success: true, workflowStatus: 'edicion' });
-  } catch (err) {
-    console.error('[POST /api/articles/:id/send-to-edicion]', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
+  sendToEdicion(id);
+  res.json({ success: true, workflowStatus: 'edicion' });
+}));
 
 // ── API: enviar a Revisión (Edición → En Progreso) ────────────────────────────
 //
@@ -198,34 +195,29 @@ app.post('/api/articles/:id/send-to-edicion', (req, res) => {
 // eso se termina de completar y se marca como error en la pestaña
 // En Progreso, igual que con cualquier otro artículo incompleto.
 
-app.post('/api/articles/:id/send-to-revision', (req, res) => {
+app.post('/api/articles/:id/send-to-revision', asyncHandler('POST /api/articles/:id/send-to-revision', async (req, res) => {
   const { id } = req.params;
-  try {
-    const article = loadArticle(id);
-    if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
+  const article = loadArticleOr404(id, res);
+  if (!article) return;
 
-    if (!article.title?.trim() || !article.contentHtml?.trim() || !article.section?.trim()) {
-      return res.status(422).json({
-        error: 'El artículo necesita título, sección y contenido antes de pasar a revisión.',
-      });
-    }
-
-    sendToRevision(id);
-    return res.json({ success: true, workflowStatus: 'en-progreso' });
-  } catch (err) {
-    console.error('[POST /api/articles/:id/send-to-revision]', err);
-    return res.status(500).json({ error: err.message });
+  if (!article.title?.trim() || !article.contentHtml?.trim() || !article.section?.trim()) {
+    return res.status(422).json({
+      error: 'El artículo necesita título, sección y contenido antes de pasar a revisión.',
+    });
   }
-});
+
+  sendToRevision(id);
+  res.json({ success: true, workflowStatus: 'en-progreso' });
+}));
 
 // ── API: publicar artículo ────────────────────────────────────────────────────
 
-app.post('/api/articles/:id/publish', async (req, res) => {
+app.post('/api/articles/:id/publish', asyncHandler('POST /api/articles/:id/publish', async (req, res) => {
   const { id } = req.params;
 
   // Quick guard before acquiring the lock
-  const article = loadArticle(id);
-  if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
+  const article = loadArticleOr404(id, res);
+  if (!article) return;
   if (article.spipArticleId) {
     return res.status(409).json({
       error:         'Artículo ya publicado',
@@ -246,7 +238,10 @@ app.post('/api/articles/:id/publish', async (req, res) => {
 
     console.log(`[publish] "${article.title}" (id=${id}, dryRun=${dryRun})`);
 
-    // Re-read from disk after lock (double-check)
+    // Re-read from disk after lock (double-check). Kept as a manual lookup
+    // (not loadArticleOr404) because these two checks carry "(post-lock)" in
+    // their messages, distinct from the pre-lock guard above — useful signal
+    // for telling the two guards apart when debugging a race.
     const fresh = loadArticle(id);
     if (!fresh) return res.status(404).json({ error: 'Artículo no encontrado (post-lock)' });
     if (fresh.spipArticleId) {
@@ -311,14 +306,10 @@ app.post('/api/articles/:id/publish', async (req, res) => {
         console.error(`[publish] Estado inesperado del use case: ${result.status}`);
         return res.status(500).json({ error: `Estado inesperado: ${result.status}` });
     }
-
-  } catch (err) {
-    console.error(`[publish] ❌ Error inesperado:`, err);
-    return res.status(500).json({ error: err.message });
   } finally {
     publishingInProgress.delete(id);
   }
-});
+}));
 
 // ── API: gestión del sitio SPIP (/api/site/*) ────────────────────────────────
 //
@@ -338,21 +329,16 @@ async function getSpipAdmin() {
 }
 
 // GET /api/site/article/:spipId/status — inspecciona el estado en SPIP
-app.get('/api/site/article/:spipId/status', async (req, res) => {
+app.get('/api/site/article/:spipId/status', asyncHandler('GET /api/site/article/:spipId/status', async (req, res) => {
   const { spipId } = req.params;
-  try {
-    const { inspectArticleStatus } = await getSpipAdmin();
-    const result = await inspectArticleStatus(spipId);
-    return res.json({ success: true, ...result });
-  } catch (err) {
-    console.error(`[GET /api/site/article/${spipId}/status]`, err.message);
-    return res.status(500).json({ error: err.message });
-  }
-});
+  const { inspectArticleStatus } = await getSpipAdmin();
+  const result = await inspectArticleStatus(spipId);
+  res.json({ success: true, ...result });
+}));
 
 // POST /api/site/article/:spipId/status — cambia el estado en SPIP
 // Body: { status: 'poubelle' | 'prepa' | 'prop' | 'publie' | 'refuse', dryRun?: boolean }
-app.post('/api/site/article/:spipId/status', async (req, res) => {
+app.post('/api/site/article/:spipId/status', asyncHandler('POST /api/site/article/:spipId/status', async (req, res) => {
   const { spipId } = req.params;
   const { status, dryRun = false } = req.body ?? {};
 
@@ -367,89 +353,68 @@ app.post('/api/site/article/:spipId/status', async (req, res) => {
     });
   }
 
-  try {
-    const { changeArticleStatus, VALID_SPIP_STATUSES } = await getSpipAdmin();
-    if (!VALID_SPIP_STATUSES[status]) {
-      return res.status(400).json({
-        error: `Estado inválido "${status}". Válidos: ${Object.keys(VALID_SPIP_STATUSES).join(', ')}`,
-      });
-    }
-    const result = await changeArticleStatus(spipId, status, { dryRun });
-    return res.json({ success: true, ...result });
-  } catch (err) {
-    console.error(`[POST /api/site/article/${spipId}/status]`, err.message);
-    return res.status(500).json({ error: err.message });
+  const { changeArticleStatus, VALID_SPIP_STATUSES } = await getSpipAdmin();
+  if (!VALID_SPIP_STATUSES[status]) {
+    return res.status(400).json({
+      error: `Estado inválido "${status}". Válidos: ${Object.keys(VALID_SPIP_STATUSES).join(', ')}`,
+    });
   }
-});
+  const result = await changeArticleStatus(spipId, status, { dryRun });
+  res.json({ success: true, ...result });
+}));
 
 // POST /api/site/article/:spipId/delete — borrado permanente desde la papelera
 // Body: { dryRun?: boolean }
 // El artículo DEBE estar en "poubelle" antes de llamar a este endpoint.
-app.post('/api/site/article/:spipId/delete', async (req, res) => {
+app.post('/api/site/article/:spipId/delete', asyncHandler('POST /api/site/article/:spipId/delete', async (req, res) => {
   const { spipId } = req.params;
   const { dryRun = false } = req.body ?? {};
 
-  try {
-    const { permanentlyDelete } = await getSpipAdmin();
-    const result = await permanentlyDelete(spipId, { dryRun });
-    if (result.success) {
-      return res.json({ success: true, dryRun: result.dryRun ?? false });
-    }
-    return res.status(500).json({
-      error: `El artículo ${spipId} sigue en la papelera tras el intento de borrado.`,
-    });
-  } catch (err) {
-    console.error(`[POST /api/site/article/${spipId}/delete]`, err.message);
-    return res.status(500).json({ error: err.message });
+  const { permanentlyDelete } = await getSpipAdmin();
+  const result = await permanentlyDelete(spipId, { dryRun });
+  if (result.success) {
+    return res.json({ success: true, dryRun: result.dryRun ?? false });
   }
-});
+  res.status(500).json({
+    error: `El artículo ${spipId} sigue en la papelera tras el intento de borrado.`,
+  });
+}));
 
 // GET /api/site/audit-report — cruce audit log ↔ archivos locales (sin Playwright)
 // Con ?verify=true, comprueba en SPIP si los IDs duplicados sobrantes siguen vivos.
-app.get('/api/site/audit-report', async (req, res) => {
-  try {
-    const { auditLogReport } = await getSpipAdmin();
-    const report = auditLogReport();
+app.get('/api/site/audit-report', asyncHandler('GET /api/site/audit-report', async (req, res) => {
+  const { auditLogReport } = await getSpipAdmin();
+  const report = auditLogReport();
 
-    if (req.query.verify === 'true' && report.duplicates?.length) {
-      const { verifyDuplicatesInSpip } = await getSpipAdmin();
-      // Observación efímera, solo lectura — no escribe nada en el audit log.
-      // Ver src/lib/spip-admin.mjs para el porqué (falsos positivos transitorios
-      // no deben convertirse en registros permanentes sin revisión humana).
-      report.duplicates = await verifyDuplicatesInSpip(report.duplicates);
-      report.verified = true;
-    }
-
-    return res.json({ success: true, report });
-  } catch (err) {
-    console.error('[GET /api/site/audit-report]', err.message);
-    return res.status(500).json({ error: err.message });
+  if (req.query.verify === 'true' && report.duplicates?.length) {
+    const { verifyDuplicatesInSpip } = await getSpipAdmin();
+    // Observación efímera, solo lectura — no escribe nada en el audit log.
+    // Ver src/lib/spip-admin.mjs para el porqué (falsos positivos transitorios
+    // no deben convertirse en registros permanentes sin revisión humana).
+    report.duplicates = await verifyDuplicatesInSpip(report.duplicates);
+    report.verified = true;
   }
-});
+
+  res.json({ success: true, report });
+}));
 
 // POST /api/site/duplicates/:spipId/confirm-deleted — confirma manualmente que
 // un ID marcado "no existe en SPIP" por la verificación fue realmente borrado
 // externamente. Única vía que persiste esa observación (pasa por guardedWrite
 // en confirmExternalDeletion) — nunca se dispara automáticamente.
-app.post('/api/site/duplicates/:spipId/confirm-deleted', async (req, res) => {
+app.post('/api/site/duplicates/:spipId/confirm-deleted', asyncHandler('POST /api/site/duplicates/:spipId/confirm-deleted', async (req, res) => {
   const { spipId } = req.params;
-  try {
-    const { confirmExternalDeletion } = await getSpipAdmin();
-    const result = await confirmExternalDeletion(spipId);
-    return res.json({ success: true, ...result });
-  } catch (err) {
-    console.error(`[POST /api/site/duplicates/${spipId}/confirm-deleted]`, err.message);
-    return res.status(500).json({ error: err.message });
-  }
-});
+  const { confirmExternalDeletion } = await getSpipAdmin();
+  const result = await confirmExternalDeletion(spipId);
+  res.json({ success: true, ...result });
+}));
 
 // POST /api/articles/:id/recover — expone --recover-from-log como llamada de API
 // Escribe spipArticleId de vuelta en el JSON cuando el write-back falló antes.
-app.post('/api/articles/:id/recover', async (req, res) => {
+app.post('/api/articles/:id/recover', asyncHandler('POST /api/articles/:id/recover', async (req, res) => {
   const { id } = req.params;
-
-  const article = loadArticle(id);
-  if (!article) return res.status(404).json({ error: 'Artículo no encontrado' });
+  const article = loadArticleOr404(id, res);
+  if (!article) return;
 
   if (article.spipArticleId) {
     return res.status(409).json({
@@ -458,21 +423,16 @@ app.post('/api/articles/:id/recover', async (req, res) => {
     });
   }
 
-  try {
-    const result = await publishArticleUseCase(article, { recoverFromLog: true });
-    switch (result.status) {
-      case 'recovered':
-        return res.json({ success: true, ...result });
-      case 'recover-not-found':
-        return res.status(404).json({ error: `No hay entrada en el audit log para "${id}"` });
-      default:
-        return res.status(500).json({ error: `Estado inesperado: ${result.status}` });
-    }
-  } catch (err) {
-    console.error(`[POST /api/articles/${id}/recover]`, err.message);
-    return res.status(500).json({ error: err.message });
+  const result = await publishArticleUseCase(article, { recoverFromLog: true });
+  switch (result.status) {
+    case 'recovered':
+      return res.json({ success: true, ...result });
+    case 'recover-not-found':
+      return res.status(404).json({ error: `No hay entrada en el audit log para "${id}"` });
+    default:
+      return res.status(500).json({ error: `Estado inesperado: ${result.status}` });
   }
-});
+}));
 
 // ── SPA fallback — sirve index.html para cualquier ruta no-API ────────────────
 
