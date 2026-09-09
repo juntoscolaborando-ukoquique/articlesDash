@@ -70,6 +70,7 @@ function sectionLabel(section) {
     gci:        'GCI',
     pi:         'PI',
     nom:        'Nuevo Orden',
+    nomfr:      'Nouvel Ordre (FR)',
     actualidad: 'Actualidad',
   };
   return map[section] ?? section ?? '—';
