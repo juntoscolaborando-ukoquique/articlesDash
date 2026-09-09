@@ -5,6 +5,78 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.6.0] — 2026-09-09
+
+### Añadido — Tests de integración de rutas + infraestructura de test
+
+- `test/server.test.mjs` — 26 tests de integración que levantan un
+  `http.Server` real en un puerto aleatorio contra un directorio temporal
+  de artículos. Sin mocks ni stubs — rutas Express reales, I/O real,
+  splitter real. Cubre:
+  - `GET /api/articles` y `GET /api/articles/:id`
+  - `POST /api/articles` (crear borrador)
+  - `PUT /api/articles/:id/draft` (guardar texto libre, aviso de JSON paste, 404)
+  - `POST /api/articles/:id/send-to-revision` — la ruta que estaba rota y
+    solo se detectaba con `curl` manual: avance edicion→en-progreso, splitter
+    extrae chapo, no pisa campos existentes, 422 en título/sección/contenido
+    vacíos, 404
+  - `PUT /api/articles/:id/fields` — guarda todos los campos editables,
+    ignora claves desconocidas, patch parcial, 404
+  - `POST /api/articles/:id/promote` — en-progreso→terminado, 422 en artículo
+    inválido, 404
+  - `POST /api/articles/:id/demote` — sin gate, funciona aunque sea inválido
+  - `POST /api/articles/:id/send-to-edicion`
+  - Round-trip completo: edicion → en-progreso (splitter) → /fields → promote
+    → terminado
+
+- `src/lib/articles-store.mjs` — seam `ARTICLES_DIR_OVERRIDE`: si la
+  variable de entorno está definida, sobreescribe el path de `articles/`.
+  Permite que los tests usen un `tmpdir` sin tocar los artículos reales.
+
+- `src/server.mjs` — `export { app }` + `app.listen()` gateado por
+  `isMain` (solo cuando el módulo es el entry point directo). Permite
+  importar `app` en tests sin bind de puerto.
+
+### Añadido — `renderError()` helper (XSS)
+
+- `public/app.js` — `renderError(el, err, prefix)`: escapa `err.message`
+  internamente. Reemplaza los `el.innerHTML = \`...${err.message}...\``
+  dispersos, que requerían recordar llamar a `escHtml` manualmente.
+  Tres de los cuatro sitios migrados; el cuarto (tbody) conserva `escHtml`
+  explícito con comentario explicando por qué `<p>` sería HTML inválido
+  dentro de `<tbody>`.
+
+### Añadido — `test/check-dom-ids.sh` (script de lint estructural)
+
+- Detecta la clase de bug "se renombró un `id=` en un archivo y no en el
+  otro". Compara los `id=` declarados estáticamente en `index.html` contra
+  los `getElementById()` en `app.js`. Solo HTML→JS (ids creados
+  dinámicamente en JS están correctamente ausentes del HTML).
+- Integrado en `npm test` (corre tras `node --test`).
+- Correcciones al script original: `$allowed && continue` ejecutaba `false`
+  como comando (bug shell); paths hardcodeados ignoraban las variables de
+  entorno (ahora `${HTML:-...}` / `${JS:-...}`).
+
+### Cambiado
+
+- `public/index.html` + `public/app.js` — botones de navegación secundaria
+  (`← Volver a la lista`, `↺ Actualizar`, botones de audit) cambiados de
+  `color: var(--muted)` a `color: var(--text)`: legibles sobre fondo oscuro
+  sin copiar el estilo de los botones de acción.
+
+- `public/app.js` + `public/index.html` — botón `+ Nuevo artículo` movido
+  del `<header>` global al toolbar de la lista, oculto por defecto, visible
+  solo cuando la pestaña activa es **Edición**. `setActiveTab()` gestiona
+  la visibilidad.
+
+- `public/app.js` — toast de transición Edición→En Progreso corregido:
+  "Enviado a Revisión" → "Enviado a En Progreso".
+
+### Total suite
+145 tests (119 unitarios + 26 integración) + DOM id check.
+
+---
+
 ## [1.5.0] — 2026-09-09
 
 ### Añadido — Splitter heurístico + editor de campos (Etapa 3, IMPROVE_STEPS.md)
