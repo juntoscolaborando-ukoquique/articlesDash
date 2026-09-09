@@ -33,6 +33,7 @@ import {
 import { validateArticle, ALLOWED_TAGS } from './lib/article-validator.mjs';
 import { publishArticleUseCase } from './lib/publish-use-case.mjs';
 import { textToParagraphHtml, looksLikeStructuredPaste } from './lib/text-to-html.mjs';
+import { splitContentIntoFields } from './lib/field-splitter.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR    = path.join(__dirname, '..', 'public');
@@ -217,8 +218,49 @@ app.post('/api/articles/:id/send-to-revision', asyncHandler('POST /api/articles/
     });
   }
 
+  // Splitter heurístico (docs/IMPROVE_STEPS.md, Paso 2): corre una sola vez,
+  // acá, en la transición — no en cada lectura. Nunca pisa un campo que el
+  // artículo ya tenga (p.ej. tras un demote + edición manual previa): el
+  // splitter solo llena huecos, la corrección humana previa siempre gana.
+  const { chapo, contentHtml, ps, guessed } = splitContentIntoFields(article.contentHtml);
+  writeBack(id, {
+    chapo,
+    contentHtml,
+    ps,
+    ...(guessed.sourceUrl && !article.sourceUrl ? { sourceUrl: guessed.sourceUrl } : {}),
+    ...(guessed.sourceSite && !article.sourceSite ? { sourceSite: guessed.sourceSite } : {}),
+    ...(guessed.sourceDate && !article.sourceDate ? { sourceDate: guessed.sourceDate } : {}),
+    ...(guessed.author && !article.author ? { author: guessed.author } : {}),
+  });
+
   sendToRevision(id);
   res.json({ success: true, workflowStatus: 'en-progreso' });
+}));
+
+// ── API: guardar campos estructurados (En Progreso) ───────────────────────────
+//
+// A diferencia de /draft, los campos llegan ya separados (los dejó el
+// formulario de En Progreso) — no corre textToParagraphHtml() ni el
+// splitter de nuevo. Sin gate de validación: guardar siempre debe poder
+// hacerse, aunque el artículo no sea válido todavía (ese gate vive en
+// /promote). Solo copia las claves que vienen en el body y son conocidas.
+
+const FIELDS_EDITABLE_KEYS = [
+  'chapo', 'contentHtml', 'ps', 'topics', 'date',
+  'author', 'sourceSite', 'sourceUrl', 'sourceDate',
+];
+
+app.put('/api/articles/:id/fields', asyncHandler('PUT /api/articles/:id/fields', async (req, res) => {
+  const { id } = req.params;
+  if (!loadArticleOr404(id, res)) return;
+
+  const body = req.body ?? {};
+  const patch = {};
+  for (const key of FIELDS_EDITABLE_KEYS) {
+    if (body[key] !== undefined) patch[key] = body[key];
+  }
+  writeBack(id, patch);
+  res.json({ success: true });
 }));
 
 // ── API: publicar artículo ────────────────────────────────────────────────────

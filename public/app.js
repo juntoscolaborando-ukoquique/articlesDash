@@ -153,12 +153,16 @@ function renderRow(article) {
   const titleBtn = document.createElement('button');
   titleBtn.className = 'article-title-link';
   titleBtn.textContent = article.title || '(sin título)';
-  titleBtn.title = isEdicion ? 'Seguir editando' : 'Ver detalle';
-  titleBtn.addEventListener('click', () => (isEdicion ? openEditor(article.id) : openDetail(article.id)));
+  titleBtn.title = isEdicion ? 'Seguir editando' : (workflowStatus === 'en-progreso' ? 'Editar campos' : 'Ver detalle');
+  titleBtn.addEventListener('click', () => {
+    if (isEdicion) return openEditor(article.id);
+    if (workflowStatus === 'en-progreso') return openFieldsEditor(article.id);
+    return openDetail(article.id); // terminado — sigue de solo lectura
+  });
   tdTitle.appendChild(titleBtn);
   const hint = document.createElement('div');
   hint.className = 'title-hint';
-  hint.textContent = isEdicion ? 'Seguir editando →' : 'Ver detalle →';
+  hint.textContent = isEdicion ? 'Seguir editando →' : (workflowStatus === 'en-progreso' ? 'Editar campos →' : 'Ver detalle →');
   tdTitle.appendChild(hint);
   if (article.descriptif) {
     const descDiv = document.createElement('div');
@@ -665,7 +669,10 @@ function renderDetail(article) {
     const demoteBtn = document.getElementById('detail-demote-btn');
     demoteBtn.addEventListener('click', () => {
       demoteArticle(article.id, demoteBtn, async () => {
-        await openDetail(article.id);
+        await loadArticles();
+        // Ahora es en-progreso — abrir el formulario de campos, no la vista
+        // de solo lectura que se acaba de dejar.
+        await openFieldsEditor(article.id);
       });
     });
   } else {
@@ -731,6 +738,153 @@ function htmlToPlainText(html) {
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
     .trim();
+}
+
+// Duplicado intencional de textToParagraphHtml() en src/lib/text-to-html.mjs —
+// mismo motivo que htmlToPlainText() arriba (sin bundler en el frontend).
+// Usado solo por el formulario de campos de En Progreso (openFieldsEditor)
+// para reconvertir texto plano a HTML restringido antes de PUT /fields.
+function textToParagraphHtml(text) {
+  if (!text || !text.trim()) return '';
+  const paragraphs = text
+    .replace(/\r\n/g, '\n')
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return paragraphs
+    .map((p) => `<p>${escHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+}
+
+// ── Fields editor view (En Progreso) ─────────────────────────────────────────
+//
+// Formulario editable de los campos separados por el splitter heurístico
+// (src/lib/field-splitter.mjs) al entrar a En Progreso: chapo / contenido /
+// ps / topics / metadata de fuente. Reemplaza la vista de solo-lectura
+// (renderDetail) únicamente para artículos en workflowStatus 'en-progreso'.
+// Ver docs/IMPROVE_STEPS.md — Paso 4.
+
+async function openFieldsEditor(id) {
+  showDetailViewLoading();
+  try {
+    const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { article } = await res.json();
+    renderFieldsEditor(article);
+  } catch (err) {
+    detailContent.innerHTML = `<p style="color:var(--red)">Error al cargar el artículo: ${escHtml(err.message)}</p>`;
+    showToast(`Error al cargar el artículo: ${err.message}`, 'error');
+  }
+}
+
+function renderFieldsEditor(article) {
+  const topicsValue = Array.isArray(article.topics) ? article.topics.join(', ') : '';
+
+  detailContent.innerHTML = `
+    <div class="detail-card">
+      <div class="detail-header">
+        <div>
+          <div class="detail-title">${escHtml(article.title || '(sin título)')}</div>
+        </div>
+        <span style="color:var(--muted); font-size:0.82rem">En Progreso — editando campos</span>
+      </div>
+
+      <div class="detail-section-label">Chapo (bajada)</div>
+      <textarea id="fields-chapo" class="editor-body-textarea" rows="3"
+        placeholder="Bajada corta que aparece antes del cuerpo…">${escHtml(htmlToPlainText(article.chapo ?? ''))}</textarea>
+
+      <div class="detail-section-label">Contenido</div>
+      <textarea id="fields-content" class="editor-body-textarea" rows="12"
+        placeholder="Cuerpo del artículo…">${escHtml(htmlToPlainText(article.contentHtml ?? ''))}</textarea>
+
+      <div class="detail-section-label">P.S.</div>
+      <textarea id="fields-ps" class="editor-body-textarea" rows="3"
+        placeholder="Post-scriptum opcional…">${escHtml(htmlToPlainText(article.ps ?? ''))}</textarea>
+
+      <div class="detail-section-label">Topics (separados por coma)</div>
+      <input id="fields-topics" type="text" class="editor-title-input" value="${escHtml(topicsValue)}" placeholder="tema-uno, tema-dos" />
+
+      <div class="detail-section-label">Fecha</div>
+      <input id="fields-date" type="date" class="editor-title-input" value="${escHtml(article.date ?? '')}" />
+
+      <div class="detail-section-label">Autor</div>
+      <input id="fields-author" type="text" class="editor-title-input" value="${escHtml(article.author ?? '')}" />
+
+      <div class="detail-section-label">Sitio de origen</div>
+      <input id="fields-source-site" type="text" class="editor-title-input" value="${escHtml(article.sourceSite ?? '')}" />
+
+      <div class="detail-section-label">URL de origen</div>
+      <input id="fields-source-url" type="text" class="editor-title-input" value="${escHtml(article.sourceUrl ?? '')}" placeholder="https://…" />
+
+      <div class="detail-section-label">Fecha de origen</div>
+      <input id="fields-source-date" type="date" class="editor-title-input" value="${escHtml(article.sourceDate ?? '')}" />
+
+      <div class="detail-footer">
+        <span id="fields-save-status" style="color:var(--muted); font-size:0.82rem"></span>
+        <span>
+          <button class="publish-btn" id="fields-save-btn">Guardar cambios</button>
+          <button class="promote-btn" id="fields-promote-btn" data-article-id="${escHtml(article.id)}">Aprobar</button>
+          <button class="edicion-btn" id="fields-edicion-btn" data-article-id="${escHtml(article.id)}">Enviar a Edición</button>
+        </span>
+      </div>
+    </div>
+  `;
+
+  const saveStatus = document.getElementById('fields-save-status');
+
+  async function saveFields() {
+    saveStatus.textContent = 'Guardando…';
+    const patch = {
+      chapo:       textToParagraphHtml(document.getElementById('fields-chapo').value),
+      contentHtml: textToParagraphHtml(document.getElementById('fields-content').value),
+      ps:          textToParagraphHtml(document.getElementById('fields-ps').value),
+      topics:      document.getElementById('fields-topics').value
+        .split(',').map((t) => t.trim()).filter(Boolean),
+      date:        document.getElementById('fields-date').value,
+      author:      document.getElementById('fields-author').value,
+      sourceSite:  document.getElementById('fields-source-site').value,
+      sourceUrl:   document.getElementById('fields-source-url').value,
+      sourceDate:  document.getElementById('fields-source-date').value,
+    };
+    try {
+      const res = await fetch(`/api/articles/${encodeURIComponent(article.id)}/fields`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
+      saveStatus.textContent = '✅ Guardado';
+      await loadArticles(); // refresca validationErrors en la lista en background
+      return true;
+    } catch (err) {
+      saveStatus.textContent = '';
+      showToast(`❌ No se pudo guardar: ${err.message}`, 'error');
+      return false;
+    }
+  }
+
+  document.getElementById('fields-save-btn').addEventListener('click', saveFields);
+
+  document.getElementById('fields-promote-btn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    // Guarda antes de aprobar — Aprobar valida contra el JSON en disco, no
+    // contra lo que hay sin guardar en el formulario.
+    if (!(await saveFields())) return;
+    promoteArticle(article.id, btn, async () => {
+      await loadArticles();
+      showListView();
+    });
+  });
+
+  document.getElementById('fields-edicion-btn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (!(await saveFields())) return;
+    sendToEdicionArticle(article.id, btn, async () => {
+      await loadArticles();
+      showListView();
+    });
+  });
 }
 
 function setEditorSaveStatus(text) {
