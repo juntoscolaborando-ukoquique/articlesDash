@@ -183,6 +183,15 @@ describe('validateArticle — descriptif', () => {
   test('rechaza descriptif que no es string', () => {
     assert.ok(errorsContaining(validateArticle(baseArticle({ descriptif: 42 })), 'descriptif'));
   });
+
+  // Regresión: la regex antigua /<[a-z]/i daba falso positivo en texto plano con
+  // comparaciones como "5<a valor" — el nuevo /<[a-z][^>]*>/i solo matcha tags reales.
+  test('acepta descriptif con comparación numérica tipo "5<a valor" (no es HTML)', () => {
+    assert.deepEqual(
+      validateArticle(baseArticle({ descriptif: 'Dosis de 5<a 10 mg son seguras.' })),
+      []
+    );
+  });
 });
 
 describe('validateArticle — coverImage', () => {

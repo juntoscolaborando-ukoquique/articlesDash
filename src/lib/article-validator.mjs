@@ -170,7 +170,7 @@ export function validateArticle(article) {
   if (article.descriptif !== undefined) {
     if (typeof article.descriptif !== 'string') {
       errors.push('descriptif: debe ser string');
-    } else if (/<[a-z]/i.test(article.descriptif)) {
+    } else if (/<[a-z][^>]*>/i.test(article.descriptif)) {
       errors.push('descriptif: no debe contener HTML (es texto plano para listados y SEO)');
     }
   }
