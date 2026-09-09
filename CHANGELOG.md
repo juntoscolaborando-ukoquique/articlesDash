@@ -5,6 +5,79 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.5.0] — 2026-09-09
+
+### Añadido — Splitter heurístico + editor de campos (Etapa 3, IMPROVE_STEPS.md)
+
+- `src/lib/field-splitter.mjs` — módulo puro nuevo. `splitContentIntoFields(contentHtml)`
+  parte el bloque único de `textToParagraphHtml()` en `chapo` / `contentHtml` / `ps`,
+  y extrae oportunistamente `sourceUrl`, `sourceSite`, `author`, `sourceDate` por patrón.
+  Nunca lanza. Diseñado para ser reemplazado por `groq-enrichment.mjs` (Etapa 4) en el
+  mismo punto del flujo sin tocar la UI.
+
+- `test/field-splitter.test.mjs` — 14 tests: entrada vacía, un solo párrafo (no extrae
+  chapo), pie de fuente, nombre de sitio, autor, fecha numérica/textual, fecha sin
+  contexto de publicación, marcadores PD/PS/Nota/*, combinación completa, inline tags
+  preservados, round-trip con `textToParagraphHtml()`.
+
+- `src/server.mjs` — el splitter se enchufa en `POST /api/articles/:id/send-to-revision`:
+  corre una sola vez en la transición, nunca pisa campos ya presentes (corrección humana
+  previa siempre gana).
+
+- `src/server.mjs` — nuevo endpoint `PUT /api/articles/:id/fields`: guarda campos
+  estructurados desde la vista En Progreso (chapo, contentHtml, ps, topics, date, author,
+  sourceSite, sourceUrl, sourceDate). Sin gate de validación — guardar siempre puede
+  hacerse; el gate vive en `/promote`.
+
+- `public/app.js` — `openFieldsEditor(id)` + `renderFieldsEditor(article)`: formulario
+  editable para artículos en En Progreso con un textarea por campo HTML y un input por
+  campo de texto. Botones "Guardar cambios", "Aprobar" (guarda primero, luego promueve) y
+  "Enviar a Edición". Reemplaza la vista de solo-lectura únicamente para `en-progreso`.
+
+- `public/app.js` — `textToParagraphHtml()`: duplicado intencional del módulo Node
+  `text-to-html.mjs` para el frontend (sin bundler). Usado por `renderFieldsEditor` al
+  guardar cada textarea como HTML restringido.
+
+### Cambiado
+
+- `public/app.js` — `renderRow()`: el click en el título ahora enruta a tres destinos
+  según `workflowStatus`: `openEditor` (edicion), `openFieldsEditor` (en-progreso),
+  `openDetail` (terminado). Antes solo distinguía edicion vs. todo lo demás.
+
+- `public/app.js` — callback de "Desaprobar" en `renderDetail()`: al demotar desde
+  Terminado, ahora abre `openFieldsEditor` en vez de `openDetail` (el artículo pasa a
+  En Progreso — la vista correcta es el formulario editable, no el detalle de solo-lectura).
+
+- `public/app.js` — toast de "Enviar a Revisión" corregido de "Enviado a Revisión" a
+  "Enviado a En Progreso" (consistente con "Enviado a Terminado" y "Enviado a Edición").
+
+- `public/app.js` + `public/index.html` — botón "+ Nuevo artículo" movido del `<header>`
+  (siempre visible) al toolbar, oculto por defecto, visible solo cuando la pestaña activa
+  es Edición. `setActiveTab()` gestiona la visibilidad.
+
+### Correcciones
+
+- `src/lib/article-validator.mjs` — regex de `descriptif` ajustada de `/<[a-z]/i` a
+  `/<[a-z][^>]*>/i`: la expresión anterior daba falso positivo en texto plano con
+  comparaciones como `"5<a valor"`. Test de regresión añadido.
+
+- `articles/temoignage-et-suite-affaire-ronald-bernard-haute-finance.json` (referenciado
+  como `articulo-1788675273805`) — reparado: `contentHtml` contenía un JSON entero en
+  bruto pegado como texto literal. Campos extraídos y restaurados; `workflowStatus` →
+  `en-progreso` para revisión humana.
+
+- `articles/articulo-1788940900561.json` — completado con los campos faltantes:
+  título completo, `surtitre`, `soustitre`, `descriptif`, `chapo`, `topics` (5 tags),
+  `author`, `sourceSite`, `sourceUrl` (YouTube). Enlace de entrevista convertido a
+  `<a href>` correcto. Cuerpo estructurado con `<h3>`, `<ul><li>`, `<blockquote>`.
+
+### Docs / infraestructura
+
+- `docs/PUBLISHING.md` — movido desde la raíz a `docs/` (finalizado el `git mv`).
+- `IMPROVE_STEPS.md` + `docs/RISKS.md` — añadidos al repositorio (estaban sin trackear).
+
+---
+
 ## [1.4.0] — 2026-09-08
 
 Tres mejoras de flujo editorial en el editor (Edición) y la pestaña En Progreso.

@@ -96,6 +96,7 @@ function isTerminado(article) {
 function setActiveTab(tab) {
   activeTab = tab;
   tabBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
+  newArticleBtn.style.display = tab === 'edicion' ? '' : 'none';
   if (tab === 'sitio') {
     viewList.style.display  = 'none';
     viewSite.style.display  = 'block';
@@ -534,7 +535,7 @@ async function sendToRevisionArticle(id, btn, onSettled) {
     loadingText: 'Enviando…', idleText: 'Enviar a Revisión →',
     onResult: (res, data) => {
       if (res.ok && data.success) {
-        return { success: true, settle: true, toastType: 'success', message: '📝 Enviado a Revisión' };
+        return { success: true, settle: true, toastType: 'success', message: '📝 Enviado a En Progreso' };
       }
       return {
         success: false, restore: true, toastType: 'error', toastDuration: 8000,
