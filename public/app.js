@@ -1292,7 +1292,8 @@ function renderAuditReport(report) {
       slugEl.textContent = group.slug;
       card.appendChild(slugEl);
 
-      const canonical = group.localSpipId;
+      const canonical      = group.localSpipId ?? group.suggestedCanonical;
+      const isConfirmed    = group.suggestedIsConfirmed;
       const canonicalLabel = group.suggestedIsConfirmed
         ? `SPIP #${canonical} (canónico — en JSON local)`
         : `SPIP #${group.suggestedCanonical} (sugerido, no confirmado)`;
@@ -1306,11 +1307,12 @@ function renderAuditReport(report) {
       list.className = 'audit-spip-list';
       for (const entry of group.aliveEntries) {
         const li = document.createElement('li');
-        const isCanon  = canonical && String(entry.spipArticleId) === String(canonical);
-        const spipGone = group.verifiedInSpip && entry.spipExists === false;
+        const isCanon  = canonical && String(entry.spipArticleId) === String(canonical);        const spipGone = group.verifiedInSpip && entry.spipExists === false;
         li.innerHTML = `SPIP #<strong>${entry.spipArticleId}</strong> — ${fmtTs(entry.loggedAt)}`;
         if (isCanon) {
-          li.innerHTML += ' <span class="audit-badge audit-badge-canon">canónico</span>';
+          li.innerHTML += isConfirmed
+            ? ' <span class="audit-badge audit-badge-canon">canónico</span>'
+            : ' <span class="audit-badge audit-badge-suggested">sugerido — no mover</span>';
         } else if (spipGone) {
           li.innerHTML += ' <span class="audit-spip-gone">ya no existe en SPIP</span>';
           const confirmBtn = document.createElement('button');
