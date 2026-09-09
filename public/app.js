@@ -1530,8 +1530,20 @@ function renderAuditReport(report) {
     for (const entry of writeBacksMissing) {
       const card = document.createElement('div');
       card.className = 'audit-item';
-      card.innerHTML = `<strong>${entry.title}</strong> <code class="audit-slug">${entry.slug}</code>
-        <span class="audit-meta">SPIP #${entry.spipArticleId} — ${fmtTs(entry.loggedAt)}</span>`;
+
+      const titleEl = document.createElement('strong');
+      titleEl.textContent = entry.title;
+      card.appendChild(titleEl);
+
+      const slugEl = document.createElement('code');
+      slugEl.className = 'audit-slug';
+      slugEl.textContent = entry.slug;
+      card.appendChild(slugEl);
+
+      const metaEl = document.createElement('span');
+      metaEl.className = 'audit-meta';
+      metaEl.textContent = `SPIP #${entry.spipArticleId} — ${fmtTs(entry.loggedAt)}`;
+      card.appendChild(metaEl);
 
       const btn = document.createElement('button');
       btn.className = 'audit-btn-recover';
@@ -1564,8 +1576,21 @@ function renderAuditReport(report) {
     for (const marker of orphanedMarkers) {
       const card = document.createElement('div');
       card.className = 'audit-item';
-      card.innerHTML = `<strong>${marker.title}</strong> <code class="audit-slug">${marker.id}</code>
-        <span class="audit-meta">spipArticleId: ${marker.spipArticleId} — verificar manualmente</span>`;
+
+      const titleEl = document.createElement('strong');
+      titleEl.textContent = marker.title;
+      card.appendChild(titleEl);
+
+      const slugEl = document.createElement('code');
+      slugEl.className = 'audit-slug';
+      slugEl.textContent = marker.id;
+      card.appendChild(slugEl);
+
+      const metaEl = document.createElement('span');
+      metaEl.className = 'audit-meta';
+      metaEl.textContent = `spipArticleId: ${marker.spipArticleId} — verificar manualmente`;
+      card.appendChild(metaEl);
+
       sec.appendChild(card);
     }
     frag.appendChild(sec);
