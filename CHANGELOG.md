@@ -5,6 +5,95 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.4.0] — 2026-09-08
+
+Tres mejoras de flujo editorial en el editor (Edición) y la pestaña En Progreso.
+
+### Añadido
+
+- `public/app.js` — **Auto-guardado al pegar**: pegar en el textarea de cuerpo
+  o en el campo de título dispara `saveDraft()` automáticamente tras un tick
+  (para que el valor del input ya tenga el texto pegado al leerlo). El snapshot
+  de historial se toma *antes* del paste, de modo que la versión pre-pegado
+  queda siempre preservada.
+
+- `public/app.js` + `public/index.html` — **Historial de borradores**:
+  panel "📋 Historial de borradores" que aparece debajo del editor cada vez
+  que se abre un artículo con historial existente. Almacena hasta 5 snapshots
+  (`{ title, section, text, savedAt }`) en `localStorage`, indexados por ID
+  de artículo. Cada snapshot muestra la hora y un preview de 60 caracteres,
+  con un botón "Restaurar" que repone los campos del editor sin guardar
+  automáticamente — el usuario revisa y confirma con "Guardar". El panel se
+  cierra con ✕ y persiste entre recargas de página.
+
+  Motivación: el auto-guardado al pegar (arriba) convierte un paste incorrecto
+  en una sobreescritura inmediata del JSON. Sin historial, no hay recuperación.
+
+- `public/app.js` — **Chequeo preventivo de títulos duplicados**: al hacer clic
+  en "Aprobar" en la pestaña En Progreso, se normaliza el título del artículo
+  (minúsculas, sin acentos, puntuación colapsada a espacios) y se compara contra
+  todos los demás artículos del array. Si se detecta un near-match (igualdad
+  exacta, o uno de los títulos contiene al otro), aparece un `confirm()` que
+  nombra el artículo similar y su estado. Bloqueo suave — el usuario puede
+  aprobar igualmente si es intencional. No requiere cambios en el servidor;
+  opera sobre el array `articles` ya cargado en el cliente.
+
+### Refactors aplicados (sin cambios de comportamiento)
+
+- `public/app.js` — `postTransition()`: helper compartido que elimina el
+  boilerplate repetido en las cinco funciones de transición de workflow
+  (`publishArticle`, `demoteArticle`, `promoteArticle`, `sendToEdicionArticle`,
+  `sendToRevisionArticle`). Cada función ahora declara solo su endpoint, labels
+  y lógica de resultado vía `onResult()`.
+
+- `src/server.mjs` — `asyncHandler()` + `loadArticleOr404()`: elimina el
+  try/catch y la guarda load-or-404 duplicados en cada ruta. Cierra también
+  el bug latente de Express 4 donde un `async` handler que lanza fuera de su
+  propio try/catch deja la request colgada sin respuesta.
+
+- `src/lib/article-validator.mjs` + `src/server.mjs` + `public/app.js` —
+  `ALLOWED_TAGS` exportado como fuente de verdad única vía
+  `GET /api/schema/allowed-tags`. `DETAIL_ALLOWED_TAGS` en `app.js` pasa de
+  copia manual a fallback con carga dinámica al arrancar. Cierra el riesgo de
+  drift documentado entre las dos listas.
+
+### Otros cambios
+
+- `src/lib/spip-client.mjs` + `src/lib/article-validator.mjs` — sección `nomfr`
+  añadida (`SLUG_TO_RUBRIQUE_ID: '9'`, `VALID_SECTIONS`): rubrique francesa
+  "NOUVEL ORDRE/PLANDÉMISME ET DOMESTICATION". Usada para re-publicar el
+  artículo francés de Ronald Bernard (#124) en la sección correcta.
+
+- `articles/*.json` — cuatro archivos renombrados para que el nombre de archivo
+  coincida con el campo `id` interno (footgun eliminado).
+
+- `src/lib/article-validator.mjs` — `sourceDate` añadido a
+  `getUnimplementedFields()`. `ALLOWED_TAGS` exportado.
+
+- `docs/SCHEMA.md` — `sourceDate` documentado en el mapeo JSON→SPIP como
+  campo que se valida pero no se escribe en SPIP.
+
+- `public/index.html` — banner de advertencia sobre el campo `date` eliminado.
+  La advertencia ahora aparece en tiempo de publicación vía
+  `getUnimplementedFields()`, como el resto de campos no implementados.
+
+- `public/app.js` — botón "📋 Copiar contenido" en la vista de detalle de
+  artículos En Progreso: copia título, chapo, cuerpo y ps como texto plano al
+  portapapeles.
+
+- `public/app.js` + `public/index.html` — botón "← Volver al dashboard" en la
+  cabecera de Gestión del Sitio.
+
+- `public/app.js` — campo ID SPIP en la pestaña Sitio tiene `<datalist>` con
+  los últimos 10 artículos publicados (título + ID). Se actualiza con cada
+  `loadArticles()`.
+
+- `PUBLISHING.md` — nuevo documento: qué significa "publicado" en este
+  dashboard, historial del problema del artículo francés #111 → resuelto
+  como #124.
+
+---
+
 ## [1.3.14] — 2026-09-08
 
 Refactor: la verificación de duplicados en SPIP vuelve a respetar la
