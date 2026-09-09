@@ -18,7 +18,9 @@ const VALID_STATUSES = ['prepa'];
 const SCHEMA_VERSION = '1.0';
 
 // Tags HTML permitidos en contentHtml, chapo y ps
-const ALLOWED_TAGS = new Set([
+// Exportado: es la fuente de verdad que /api/schema/allowed-tags expone al
+// frontend, para que public/app.js no tenga que mantener una copia manual.
+export const ALLOWED_TAGS = new Set([
   'h3', 'h4', 'p', 'br', 'hr',
   'strong', 'em',
   'ul', 'ol', 'li',

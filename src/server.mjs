@@ -30,7 +30,7 @@ import {
   sendToEdicion,
   sendToRevision,
 } from './lib/articles-store.mjs';
-import { validateArticle } from './lib/article-validator.mjs';
+import { validateArticle, ALLOWED_TAGS } from './lib/article-validator.mjs';
 import { publishArticleUseCase } from './lib/publish-use-case.mjs';
 import { textToParagraphHtml, looksLikeStructuredPaste } from './lib/text-to-html.mjs';
 
@@ -104,6 +104,17 @@ app.post('/api/articles', asyncHandler('POST /api/articles', async (req, res) =>
   const title = typeof req.body?.title === 'string' ? req.body.title : '';
   const article = createDraftArticle({ title });
   res.status(201).json({ article });
+}));
+
+// ── API: schema (metadata expuesta al frontend) ───────────────────────────────
+//
+// Le da a public/app.js una fuente de verdad en runtime en vez de una copia
+// manual. sanitizeHtml() en app.js consulta esto una vez al cargar la página
+// y cae de vuelta a una lista fija embebida si el fetch falla (arranque sin
+// red, etc.) — ver el comentario junto a DETAIL_ALLOWED_TAGS en app.js.
+
+app.get('/api/schema/allowed-tags', asyncHandler('GET /api/schema/allowed-tags', async (_req, res) => {
+  res.json({ allowedTags: [...ALLOWED_TAGS] });
 }));
 
 // ── API: detalle de artículo ──────────────────────────────────────────────────

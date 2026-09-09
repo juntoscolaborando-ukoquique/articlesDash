@@ -816,9 +816,16 @@ function escHtml(str) {
 // Strips everything that isn't in the schema-allowed tag list before injecting
 // article HTML into the detail view. Uses DOMParser (real tree walk, not regex)
 // so no amount of encoding tricks can sneak through a forbidden tag.
-// Mirrors the ALLOWED_TAGS set in article-validator.mjs — keep them in sync.
+//
+// The tag list itself is fetched once at boot from GET /api/schema/allowed-tags,
+// which re-exports the real ALLOWED_TAGS from article-validator.mjs — that's
+// the single source of truth now. The set below is only a fallback for if that
+// fetch fails (e.g. offline dev work): it should still roughly match the
+// backend, but being briefly stale here just means the detail view sanitises
+// against slightly outdated rules until the fetch succeeds, not a silent
+// permanent drift like before.
 
-const DETAIL_ALLOWED_TAGS = new Set([
+let DETAIL_ALLOWED_TAGS = new Set([
   'h3', 'h4', 'p', 'br', 'hr',
   'strong', 'em',
   'ul', 'ol', 'li',
@@ -827,6 +834,21 @@ const DETAIL_ALLOWED_TAGS = new Set([
   'table', 'thead', 'tbody', 'tr', 'th', 'td',
   'a',
 ]);
+
+async function loadAllowedTagsFromSchema() {
+  try {
+    const res = await fetch('/api/schema/allowed-tags');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data.allowedTags) && data.allowedTags.length) {
+      DETAIL_ALLOWED_TAGS = new Set(data.allowedTags);
+    }
+  } catch {
+    // Fetch failed (offline, server down mid-boot, etc.) — keep the fallback
+    // set above. Not worth a toast: it only affects detail-view sanitising,
+    // and the fallback is a reasonable approximation.
+  }
+}
 
 const DETAIL_ALLOWED_ATTRS = {
   'a':   ['href', 'target', 'rel'],
@@ -917,6 +939,7 @@ document.getElementById('site-back-btn').addEventListener('click', () => setActi
 editorSaveBtn.addEventListener('click', handleEditorSave);
 editorSendBtn.addEventListener('click', handleEditorSend);
 loadArticles();
+loadAllowedTagsFromSchema();
 
 // ── Sitio tab — gestión del sitio SPIP ───────────────────────────────────────
 
