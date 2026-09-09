@@ -493,9 +493,17 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
+// ── Export (for tests) + conditional listen ───────────────────────────────────
+// Export `app` so test/server.test.mjs can import it and spin up an
+// http.Server on a random port without touching the network in production.
+// `app.listen()` only runs when this module is the direct entry point.
 
-app.listen(PORT, () => {
-  console.log(`\n🗞️  Kilombo Dashboard`);
-  console.log(`   http://localhost:${PORT}\n`);
-});
+export { app };
+
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain) {
+  app.listen(PORT, () => {
+    console.log(`\n🗞️  Kilombo Dashboard`);
+    console.log(`   http://localhost:${PORT}\n`);
+  });
+}

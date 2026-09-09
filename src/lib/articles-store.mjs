@@ -16,7 +16,8 @@ import { fileURLToPath } from 'url';
 import { validateArticle } from './article-validator.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ARTICLES_DIR = path.join(__dirname, '..', '..', 'articles');
+const ARTICLES_DIR = process.env.ARTICLES_DIR_OVERRIDE
+  ?? path.join(__dirname, '..', '..', 'articles');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
