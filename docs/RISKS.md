@@ -1,0 +1,7 @@
+weaknesses / risks
+
+No authentication on the Express server (server.mjs) despite exposing endpoints that can publish and permanently delete live articles. It's documented as a "single-user local tool," but app.listen(PORT) with no host argument binds to all interfaces, not just localhost — if this machine is ever reachable on a network, anyone could hit /api/articles/:id/publish or the delete endpoints.
+Fragile browser automation: spip-admin.mjs/spip-client.mjs drive the SPIP admin UI via CSS selectors and hardcoded waitForTimeout() calls (500ms, 1500ms, 3000ms) rather than robust wait conditions. Any SPIP UI change silently breaks this, and timing-based waits are a known source of flaky failures.
+Regex-based HTML validation (article-validator.mjs's analyzeHtml) is explicitly acknowledged as "not a full parser" — fine as a best-effort gate, but could miss malformed/nested markup a real parser would catch.
+Minor XSS surface in app.js: a few innerHTML = ...${err.message}... assignments aren't run through escHtml (e.g. around line 1241), unlike most other dynamic insertions in the same file which are properly escaped — inconsistent application of an otherwise-good pattern.
+Single points of failure by design, acknowledged: the in-memory publish lock is explicitly "sufficient for a single-user local tool" but would break under multiple server instances — correctly flagged in a comment rather than silently risky.
