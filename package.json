@@ -12,7 +12,7 @@
     "probe": "node src/probe-rubriques.mjs",
     "status": "node src/manage-article-status.mjs",
     "delete-article": "node src/permanently-delete-article.mjs",
-    "test": "node --test"
+    "test": "node --test && bash test/check-dom-ids.sh"
   },
   "dependencies": {
     "express": "^4.19.2",

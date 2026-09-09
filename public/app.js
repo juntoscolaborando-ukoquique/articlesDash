@@ -319,8 +319,8 @@ async function loadArticles() {
     renderTable(articles);
     populatePublishedArticlesList(articles);
   } catch (err) {
-    tbody.innerHTML = `<tr class="state-row"><td colspan="6">Error al cargar artículos: ${escHtml(err.message)}</td></tr>`;
-    showToast(`Error al cargar artículos: ${err.message}`, 'error');
+    // Table context: renderError() would produce <p> inside <tbody> (invalid HTML). escHtml() is intentional here.
+    tbody.innerHTML = `<tr class="state-row"><td colspan="6">Error al cargar artículos: ${escHtml(err.message)}</td></tr>`;    showToast(`Error al cargar artículos: ${err.message}`, 'error');
   }
 }
 
@@ -561,7 +561,7 @@ async function openDetail(id) {
     const { article } = await res.json();
     renderDetail(article);
   } catch (err) {
-    detailContent.innerHTML = `<p style="color:var(--red)">Error al cargar el artículo: ${escHtml(err.message)}</p>`;
+    renderError(detailContent, err, 'Error al cargar el artículo');
     showToast(`Error al cargar el artículo: ${err.message}`, 'error');
   }
 }
@@ -773,7 +773,7 @@ async function openFieldsEditor(id) {
     const { article } = await res.json();
     renderFieldsEditor(article);
   } catch (err) {
-    detailContent.innerHTML = `<p style="color:var(--red)">Error al cargar el artículo: ${escHtml(err.message)}</p>`;
+    renderError(detailContent, err, 'Error al cargar el artículo');
     showToast(`Error al cargar el artículo: ${err.message}`, 'error');
   }
 }
@@ -1100,6 +1100,20 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * Sets el.innerHTML to a safe error message, escaping the error text so no
+ * caller has to remember to call escHtml() on err.message themselves.
+ * Use this instead of `el.innerHTML = \`...${err.message}...\`` everywhere.
+ *
+ * @param {Element} el   - container to write into
+ * @param {unknown} err  - Error object or any value with a .message / toString
+ * @param {string}  [prefix] - optional label prefix (default: 'Error')
+ */
+function renderError(el, err, prefix = 'Error') {
+  const msg = (err instanceof Error ? err.message : String(err)) || 'Error desconocido';
+  el.innerHTML = `<p style="color:var(--red)">${escHtml(prefix)}: ${escHtml(msg)}</p>`;
+}
+
 // ── HTML sanitiser ────────────────────────────────────────────────────────────
 //
 // Strips everything that isn't in the schema-allowed tag list before injecting
@@ -1393,7 +1407,7 @@ async function loadAuditReport({ verify = false } = {}) {
     if (!res.ok || !data.success) throw new Error(data.error ?? 'Error desconocido');
     renderAuditReport(data.report);
   } catch (err) {
-    auditContent.innerHTML = `<p class="audit-error">❌ ${err.message}</p>`;
+    renderError(auditContent, err, '❌');
   } finally {
     auditLoading.style.display = 'none';
     auditVerifyBtn.disabled = false;
