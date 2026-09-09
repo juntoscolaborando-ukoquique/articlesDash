@@ -221,6 +221,19 @@
       cursor: wait;
     }
 
+    /* ── Copy button (En Progreso — copiar contenido al portapapeles) ── */
+    .copy-btn {
+      padding: 0.35rem 0.8rem;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+
     /* ── Demote button (Terminado → En Progreso) ── */
     .demote-btn {
       background: none;
@@ -567,6 +580,45 @@
     .editor-send-btn:hover:not(:disabled) { opacity: 0.85; }
     .editor-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    /* ── Draft history panel ── */
+    .draft-history-panel {
+      margin-top: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      font-size: 0.83rem;
+    }
+    .draft-history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .draft-history-title { font-weight: 600; color: var(--muted); }
+    .draft-history-close {
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; font-size: 0.9rem; padding: 0 0.2rem;
+    }
+    .draft-history-close:hover { color: var(--text); }
+    .draft-history-list { list-style: none; padding: 0; margin: 0; }
+    .draft-history-list li {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.45rem 0.75rem;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .draft-history-list li:last-child { border-bottom: none; }
+    .draft-history-ts { color: var(--muted); font-size: 0.78rem; flex-shrink: 0; }
+    .draft-history-preview { color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .draft-history-restore {
+      padding: 0.2rem 0.55rem; font-size: 0.78rem;
+      background: none; border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--muted);
+      cursor: pointer; flex-shrink: 0;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .draft-history-restore:hover { color: var(--accent); border-color: var(--accent); }
+
     /* ── Sitio tab ── */
     .tab-btn-sitio { margin-left: auto; color: var(--muted); }
 
@@ -832,6 +884,14 @@
             <button id="editor-send-btn" class="editor-send-btn">Enviar a Revisión →</button>
           </span>
         </div>
+      </div>
+      <!-- Draft history — snapshots taken before each paste -->
+      <div id="draft-history-panel" class="draft-history-panel" style="display:none">
+        <div class="draft-history-header">
+          <span class="draft-history-title">📋 Historial de borradores</span>
+          <button id="draft-history-close" class="draft-history-close" title="Cerrar">✕</button>
+        </div>
+        <ul id="draft-history-list" class="draft-history-list"></ul>
       </div>
     </div>
 

@@ -447,9 +447,50 @@ async function promoteArticle(id, btn, onSettled) {
   });
 }
 
+// ── Duplicate title check ─────────────────────────────────────────────────────
+// Normalizes a title for loose comparison: lowercase, strip accents,
+// collapse non-alphanumeric to spaces.
+function normalizeTitle(title) {
+  return String(title || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Returns the first article whose normalized title near-matches `title`,
+// excluding the article with `excludeId`. Checks all workflow statuses.
+function findDuplicateTitle(title, excludeId) {
+  const norm = normalizeTitle(title);
+  if (!norm) return null;
+  return articles.find((a) => {
+    if (a.id === excludeId) return false;
+    const other = normalizeTitle(a.title);
+    if (!other) return false;
+    return other === norm || other.includes(norm) || norm.includes(other);
+  }) ?? null;
+}
+
 function handlePromote(e) {
   const btn = e.currentTarget;
   const id  = btn.dataset.articleId;
+
+  const article = articles.find((a) => a.id === id);
+  if (article) {
+    const dup = findDuplicateTitle(article.title, id);
+    if (dup) {
+      const confirmed = confirm(
+        `⚠️ Posible título duplicado\n\n` +
+        `"${article.title}"\n\n` +
+        `es similar a:\n` +
+        `"${dup.title}" (${dup.workflowStatus ?? 'terminado'})\n\n` +
+        `¿Querés aprobar igualmente?`
+      );
+      if (!confirmed) return;
+    }
+  }
+
   promoteArticle(id, btn, loadArticles);
 }
 
@@ -591,6 +632,10 @@ function renderDetail(article) {
       <div class="detail-footer">
         <span style="color:var(--muted); font-size:0.82rem">id: ${escHtml(article.id)}</span>
         <span>
+          ${article.workflowStatus === 'en-progreso'
+            ? `<button class="copy-btn" id="detail-copy-btn" data-article-id="${escHtml(article.id)}">📋 Copiar contenido</button>`
+            : ''
+          }
           ${isPublished
             ? ''
             : `<button class="publish-btn" id="detail-publish-btn" data-article-id="${escHtml(article.id)}">Publicar en SPIP</button>`
@@ -636,6 +681,29 @@ function renderDetail(article) {
         await loadArticles();
         showListView();
       });
+    });
+  }
+
+  // Copy button — only present for en-progreso articles
+  if (article.workflowStatus === 'en-progreso') {
+    document.getElementById('detail-copy-btn').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const parts = [];
+      if (article.surtitre)    parts.push(article.surtitre);
+      if (article.title)       parts.push(article.title);
+      if (article.soustitre)   parts.push(article.soustitre);
+      if (article.descriptif)  parts.push('\n' + article.descriptif);
+      if (article.chapo)       parts.push('\n' + htmlToPlainText(article.chapo));
+      if (article.contentHtml) parts.push('\n' + htmlToPlainText(article.contentHtml));
+      if (article.ps)          parts.push('\n' + htmlToPlainText(article.ps));
+
+      try {
+        await navigator.clipboard.writeText(parts.join('\n'));
+        btn.textContent = '✅ Copiado';
+        setTimeout(() => { btn.textContent = '📋 Copiar contenido'; }, 2000);
+      } catch {
+        showToast('❌ No se pudo copiar al portapapeles', 'error');
+      }
     });
   }
 }
@@ -688,6 +756,7 @@ async function openEditor(id) {
     editorSectionSelect.value = article.section ?? '';
     editorBodyInput.value = htmlToPlainText(article.contentHtml ?? '');
     setEditorSaveStatus('');
+    renderDraftHistory(id);
   } catch (err) {
     showToast(`Error al cargar el borrador: ${err.message}`, 'error');
     showListView();
@@ -696,6 +765,70 @@ async function openEditor(id) {
     editorSectionSelect.disabled = false;
     editorBodyInput.disabled     = false;
   }
+}
+
+// ── Draft history (localStorage snapshots) ───────────────────────────────────
+
+const HISTORY_MAX     = 5;
+const draftHistoryPanel = document.getElementById('draft-history-panel');
+const draftHistoryList  = document.getElementById('draft-history-list');
+document.getElementById('draft-history-close').addEventListener('click', () => {
+  draftHistoryPanel.style.display = 'none';
+});
+
+function historyKey(id) { return `draft-history:${id}`; }
+
+function loadHistory(id) {
+  try { return JSON.parse(localStorage.getItem(historyKey(id)) ?? '[]'); }
+  catch { return []; }
+}
+
+function saveHistory(id, snapshots) {
+  try { localStorage.setItem(historyKey(id), JSON.stringify(snapshots)); }
+  catch { /* localStorage full or unavailable — silent */ }
+}
+
+/** Capture current editor state as a snapshot BEFORE a destructive change. */
+function snapshotDraft(id) {
+  if (!id) return;
+  const snapshot = {
+    savedAt: new Date().toISOString(),
+    title:   editorTitleInput.value,
+    section: editorSectionSelect.value,
+    text:    editorBodyInput.value,
+  };
+  const history = loadHistory(id);
+  history.unshift(snapshot);
+  saveHistory(id, history.slice(0, HISTORY_MAX));
+  renderDraftHistory(id);
+}
+
+function renderDraftHistory(id) {
+  const history = loadHistory(id);
+  if (!history.length) { draftHistoryPanel.style.display = 'none'; return; }
+
+  draftHistoryPanel.style.display = 'block';
+  draftHistoryList.innerHTML = '';
+  history.forEach((snap, i) => {
+    const li = document.createElement('li');
+    const preview = (snap.title || snap.text || '').replace(/\n/g, ' ').trim().slice(0, 60);
+    const ts = new Date(snap.savedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    li.innerHTML = `
+      <span class="draft-history-ts">${ts}</span>
+      <span class="draft-history-preview">${escHtml(preview || '(vacío)')}</span>
+      <button class="draft-history-restore" data-index="${i}">Restaurar</button>
+    `;
+    li.querySelector('.draft-history-restore').addEventListener('click', () => {
+      const h = loadHistory(id);
+      const s = h[i];
+      if (!s) return;
+      editorTitleInput.value      = s.title ?? '';
+      editorSectionSelect.value   = s.section ?? '';
+      editorBodyInput.value       = s.text ?? '';
+      setEditorSaveStatus('Restaurado — guardá para confirmar');
+    });
+    draftHistoryList.appendChild(li);
+  });
 }
 
 /**
@@ -937,6 +1070,12 @@ backBtn.addEventListener('click', showListView);
 editorBackBtn.addEventListener('click', handleEditorBack);
 document.getElementById('site-back-btn').addEventListener('click', () => setActiveTab('terminado'));
 editorSaveBtn.addEventListener('click', handleEditorSave);
+
+// Auto-save on paste in either editor field — wait one tick for the pasted
+// text to land in the input value before reading it.
+// Snapshot is taken BEFORE the paste so the pre-paste state is preserved.
+editorBodyInput.addEventListener('paste', () => { snapshotDraft(editingArticleId); setTimeout(saveDraft, 0); });
+editorTitleInput.addEventListener('paste', () => { snapshotDraft(editingArticleId); setTimeout(saveDraft, 0); });
 editorSendBtn.addEventListener('click', handleEditorSend);
 loadArticles();
 loadAllowedTagsFromSchema();
