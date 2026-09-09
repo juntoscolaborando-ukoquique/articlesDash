@@ -24,8 +24,8 @@
   ],
   "status": "prepa",
   "workflowStatus": "terminado",
-  "notes": "contentHtml reparado 2026-09-09: doble-escape producido por textToParagraphHtml sobre HTML ya formateado. SPIP ID 125 publicado con la versión corrupta — editar manualmente en /ecrire/ o borrar y re-publicar.",
-  "spipArticleId": "125",
-  "publishedAt": "2026-09-09T17:25:58.335Z",
-  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=125"
+  "notes": "contentHtml reparado 2026-09-09: doble-escape producido por textToParagraphHtml sobre HTML ya formateado. SPIP ID 125 borrado y re-publicado con la versión correcta.",
+  "spipArticleId": "126",
+  "publishedAt": "2026-09-09T20:39:48.331Z",
+  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=126"
 }
