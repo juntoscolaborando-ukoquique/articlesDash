@@ -221,6 +221,9 @@ ahora. Ya existen:
 **Lo que falta para cerrar la etapa:**
 - Editor real de campos (surtitre, soustitre, chapo, ps, topics, coverImage) —
   hoy Edición solo cubre título + cuerpo en texto plano.
+  → Ver **[IMPROVE_STEPS.md](../IMPROVE_STEPS.md)** para el plan detallado:
+  splitter heurístico + formulario editable en En Progreso, diseñado para que
+  Groq (Etapa 4) se enchufe en el mismo punto sin tocar la UI.
 - Rich-text (Tiptap) en vez de textarea plano, si se decide que hace falta
   para el contenido real que se está publicando.
 - Sanitización explícita (DOMPurify o equivalente) antes de que el HTML
@@ -296,6 +299,12 @@ finalizeArticle(article)               // Transición 2
 Ambas devuelven `{ status: 'ok' | 'error', fields, rawResponse }`. El
 caller (use case o handler) decide si escribir el resultado o mostrarlo
 como sugerencia al usuario.
+
+> **Nota de integración:** `enrichDraft()` reemplaza a `splitContentIntoFields()`
+> de `field-splitter.mjs` (ver [IMPROVE_STEPS.md](../IMPROVE_STEPS.md) Paso 7)
+> en el mismo punto de `POST /api/articles/:id/send-to-revision` — devuelve la
+> misma forma `{ chapo, contentHtml, ps, guessed }`, sin cambios en la UI ni en
+> el endpoint de campos.
 
 Reutiliza la clave `GROQ_API_KEY` — añadir a `.env` y `.env.example` antes de
 implementar (el placeholder ya está en `.env.example`).
