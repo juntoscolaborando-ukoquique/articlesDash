@@ -131,7 +131,13 @@ export function listArticles() {
           `[articles-store] ⚠️  "${id}" movido de Terminado → En Progreso (falló validación):\n` +
           validationErrors.map((e) => `    • ${e}`).join('\n')
         );
-        writeBack(id, { workflowStatus: 'en-progreso' });
+        // atomicWrite() directamente, no writeBack(id, ...): ya tenemos
+        // `filepath` y `article` de esta misma pasada de readdirSync().
+        // writeBack() volvería a llamar a findArticleById(), que relee y
+        // reparsea TODOS los archivos de articles/ otra vez solo para
+        // encontrar el que ya tenemos en la mano — O(n²) en la cantidad de
+        // artículos, y en cada GET /api/articles que tenga algo que sanar.
+        atomicWrite(filepath, article, { workflowStatus: 'en-progreso' });
         workflowStatus = 'en-progreso';
       }
 
