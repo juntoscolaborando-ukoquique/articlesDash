@@ -4,7 +4,19 @@
 
 ---
 
-## Criterio de ordenamiento
+## Documentación de soporte
+
+- [REMOTE-MANAGE.md](REMOTE-MANAGE.md) — Guía completa para operaciones
+  remotas en SPIP (cambios de estado, borrados, recuperación de marcadores,
+  duplicados). Lectura obligatoria antes de trabajar con la pestaña Sitio.
+
+- [IMPLEMENTATION-ANALYSIS.md](IMPLEMENTATION-ANALYSIS.md) — Análisis de
+  viabilidad de tres mejoras de infraestructura: (1) documentación de
+  operaciones remotas, (2) detección de duplicados locales en el dashboard
+  Sitio (~7.5-9.5 horas, diseño completo + código de ejemplo), (3) borrado
+  directo sin papelera (análisis: no recomendado, mantener 2-step actual).
+
+---
 
 Las etapas siguen el orden del PLAN_KILOMBO.md: de lo más frágil y externo
 (publicar en SPIP) hacia lo más interno (editor, IA). Cada etapa debe estar
@@ -219,6 +231,17 @@ ahora. Ya existen:
   (`looksLikeStructuredPaste()`), como aviso no bloqueante — ver CHANGELOG 1.3.4.
 
 **Lo que falta para cerrar la etapa:**
+- **Detección y limpieza de duplicados locales en el Sitio** — cuando dos
+  borradores tienen títulos similares. Ver
+  [IMPLEMENTATION-ANALYSIS.md](IMPLEMENTATION-ANALYSIS.md) §2 ("Issue 2:
+  Duplicate detection") para los detalles de diseño, endpoints backend, UI
+  y estimación de esfuerzo (~7.5-9.5 horas). La feature está completamente
+  analizada y lista para implementar. Resumen: nuevo endpoint
+  `POST /api/site/find-local-duplicates`, card en Sitio tab, selector de
+  canonical con metadata (fecha, tamaño, palabras), botón para borrar duplicados
+  seleccionados. Incluye shared utility `src/lib/text-utils.mjs` con normalización
+  de títulos para evitar divergencia backend/frontend.
+
 - Editor real de campos (surtitre, soustitre, chapo, ps, topics, coverImage) —
   hoy Edición solo cubre título + cuerpo en texto plano.
   → Ver **[IMPROVE_STEPS.md](../IMPROVE_STEPS.md)** para el plan detallado:
