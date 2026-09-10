@@ -5,9 +5,11 @@
  * Es el único lugar del backend que toca el sistema de archivos para artículos.
  *
  * Exporta:
- *   listArticles()  → Array de objetos con los campos clave de cada artículo
- *   loadArticle(id) → Objeto completo del artículo, o null si no existe
+ *   listArticles()   → Array de objetos con los campos clave de cada artículo
+ *   listArchive()    → Array de objetos del archivo (articles/archive/)
+ *   loadArticle(id)  → Objeto completo del artículo, o null si no existe
  *   writeBack(id, fields) → Escribe campos en el JSON (atómico: temp + rename)
+ *   archiveArticle(id)    → Mueve manualmente un artículo al archivo
  */
 
 import fs from 'fs';
@@ -18,6 +20,14 @@ import { validateArticle } from './article-validator.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARTICLES_DIR = process.env.ARTICLES_DIR_OVERRIDE
   ?? path.join(__dirname, '..', '..', 'articles');
+
+// Archive lives inside articles/archive/ — same root, always relative to
+// ARTICLES_DIR so ARTICLES_DIR_OVERRIDE in tests keeps everything consistent.
+const ARCHIVE_DIR = path.join(ARTICLES_DIR, 'archive');
+
+// Limits
+const ARTICLES_LIMIT = 100;  // max articles in articles/ before auto-archiving
+const ARCHIVE_LIMIT  = 200;  // max articles in articles/archive/ before hard-deleting oldest
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -108,6 +118,10 @@ export function findArticleAbsolutePath(id) {
  */
 export function listArticles() {
   if (!fs.existsSync(ARTICLES_DIR)) return [];
+
+  // Auto-archive: if articles/ exceeds the limit, move oldest published
+  // articles to archive/ before building the list.
+  enforceArchiveLimit();
 
   // Build a map of slug → SPIP IDs created but never permanently deleted,
   // from the audit log. Used to flag articles that were previously published
@@ -317,6 +331,153 @@ function atomicWrite(filepath, article, fields) {
 
   fs.writeFileSync(tmpPath, JSON.stringify(updated, null, 2) + '\n', 'utf8');
   fs.renameSync(tmpPath, filepath); // atómico en el mismo filesystem
+}
+
+/**
+ * Auto-archive enforcement. Called at the top of every listArticles() call.
+ *
+ * When articles/ has more than ARTICLES_LIMIT files (excluding archive/):
+ *   1. Sort candidates by "least valuable first": published articles (have
+ *      spipArticleId) sorted by publishedAt ascending (oldest first).
+ *      Unpublished articles (no spipArticleId) are never auto-archived.
+ *   2. Move the excess published articles to articles/archive/.
+ *   3. After moving, prune archive/ to ARCHIVE_LIMIT by deleting the oldest
+ *      files (by mtime) — the only place in this codebase where a JSON is
+ *      permanently deleted without user action.
+ *
+ * Runs synchronously and in-process — it is intentionally simple and cheap
+ * (just fs.renameSync). Errors are logged but never propagate to the caller.
+ */
+function enforceArchiveLimit() {
+  try {
+    if (!fs.existsSync(ARTICLES_DIR)) return;
+
+    // Count only direct .json files in articles/ (not in archive/ subdir)
+    const files = fs.readdirSync(ARTICLES_DIR).filter((f) => f.endsWith('.json'));
+    const overflow = files.length - ARTICLES_LIMIT;
+    if (overflow <= 0) return;
+
+    // Gather published articles with their publishedAt timestamp
+    const candidates = [];
+    for (const filename of files) {
+      const filepath = path.join(ARTICLES_DIR, filename);
+      const article = readArticleFile(filepath);
+      if (!article?.spipArticleId) continue; // never auto-archive unpublished
+      candidates.push({ filepath, filename, publishedAt: article.publishedAt ?? '' });
+    }
+
+    // Oldest published first
+    candidates.sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+
+    // Move only as many as needed to bring count back to the limit
+    if (!fs.existsSync(ARCHIVE_DIR)) fs.mkdirSync(ARCHIVE_DIR, { recursive: true });
+
+    const toMove = candidates.slice(0, overflow);
+    for (const { filepath, filename } of toMove) {
+      const dest = path.join(ARCHIVE_DIR, filename);
+      // If a file with the same name already exists in archive, add a timestamp suffix
+      const finalDest = fs.existsSync(dest)
+        ? path.join(ARCHIVE_DIR, filename.replace('.json', `-${Date.now()}.json`))
+        : dest;
+      fs.renameSync(filepath, finalDest);
+      console.log(`[articles-store] 📦 Auto-archivado: ${filename} → archive/${path.basename(finalDest)}`);
+    }
+
+    // Prune archive/ if it exceeds ARCHIVE_LIMIT — delete oldest by mtime
+    pruneArchive();
+  } catch (err) {
+    console.error(`[articles-store] enforceArchiveLimit error: ${err.message}`);
+  }
+}
+
+/**
+ * Prunes articles/archive/ to at most ARCHIVE_LIMIT files by permanently
+ * deleting the oldest ones (sorted by mtime ascending).
+ * Called after every auto-archive move. Errors are logged, never propagated.
+ */
+function pruneArchive() {
+  try {
+    if (!fs.existsSync(ARCHIVE_DIR)) return;
+    const files = fs.readdirSync(ARCHIVE_DIR).filter((f) => f.endsWith('.json'));
+    const overflow = files.length - ARCHIVE_LIMIT;
+    if (overflow <= 0) return;
+
+    // Sort by mtime ascending (oldest first)
+    const withMtime = files.map((f) => {
+      const fp = path.join(ARCHIVE_DIR, f);
+      return { filepath: fp, mtime: fs.statSync(fp).mtimeMs };
+    });
+    withMtime.sort((a, b) => a.mtime - b.mtime);
+
+    for (const { filepath } of withMtime.slice(0, overflow)) {
+      fs.unlinkSync(filepath);
+      console.log(`[articles-store] 🗑️  Archive pruned: ${path.basename(filepath)}`);
+    }
+  } catch (err) {
+    console.error(`[articles-store] pruneArchive error: ${err.message}`);
+  }
+}
+
+/**
+ * Moves an article manually to articles/archive/ (user-triggered action).
+ * Does not check limits — pruneArchive() handles overflow.
+ * @param {string} id — article id (JSON `id` field)
+ */
+export function archiveArticle(id) {
+  const found = findArticleById(id);
+  if (!found) throw new Error(`Artículo no encontrado: ${id}`);
+
+  if (!fs.existsSync(ARCHIVE_DIR)) fs.mkdirSync(ARCHIVE_DIR, { recursive: true });
+
+  const { filepath } = found;
+  const filename = path.basename(filepath);
+  const dest = fs.existsSync(path.join(ARCHIVE_DIR, filename))
+    ? path.join(ARCHIVE_DIR, filename.replace('.json', `-${Date.now()}.json`))
+    : path.join(ARCHIVE_DIR, filename);
+
+  fs.renameSync(filepath, dest);
+  pruneArchive();
+}
+
+/**
+ * Returns the list of archived articles from articles/archive/*.json,
+ * mapped to the same shape as listArticles() for consistent rendering.
+ * No auto-archive, no self-heal — archive is read-only from the dashboard.
+ */
+export function listArchive() {
+  if (!fs.existsSync(ARCHIVE_DIR)) return [];
+
+  return fs
+    .readdirSync(ARCHIVE_DIR)
+    .filter((f) => f.endsWith('.json'))
+    .map((filename) => {
+      const filepath = path.join(ARCHIVE_DIR, filename);
+      const article = readArticleFile(filepath);
+      if (!article) return null;
+
+      const id = article.id ?? filename.replace('.json', '');
+      return {
+        id,
+        filename,
+        title:        article.title ?? '(sin título)',
+        section:      article.section ?? null,
+        language:     article.language ?? null,
+        date:         article.date ?? null,
+        status:       article.spipArticleId ? 'publicado' : 'listo',
+        spipArticleId: article.spipArticleId ?? null,
+        publishedAt:  article.publishedAt ?? null,
+        publishedUrl: article.publishedUrl ?? null,
+        descriptif:   article.descriptif ?? null,
+        workflowStatus: article.workflowStatus ?? 'terminado',
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      // Most recently published first in the archive view
+      if (a.publishedAt && b.publishedAt) return b.publishedAt.localeCompare(a.publishedAt);
+      if (a.date && b.date) return b.date.localeCompare(a.date);
+      return 0;
+    });
 }
 
 /**

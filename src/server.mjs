@@ -22,6 +22,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import {
   listArticles,
+  listArchive,
   loadArticle,
   writeBack,
   createDraftArticle,
@@ -29,6 +30,7 @@ import {
   promoteToTerminado,
   sendToEdicion,
   sendToRevision,
+  archiveArticle,
 } from './lib/articles-store.mjs';
 import { validateArticle, ALLOWED_TAGS } from './lib/article-validator.mjs';
 import { publishArticleUseCase } from './lib/publish-use-case.mjs';
@@ -118,12 +120,31 @@ app.get('/api/schema/allowed-tags', asyncHandler('GET /api/schema/allowed-tags',
   res.json({ allowedTags: [...ALLOWED_TAGS] });
 }));
 
+// ── API: archivo — lista ──────────────────────────────────────────────────────
+
+app.get('/api/articles/archive', asyncHandler('GET /api/articles/archive', async (_req, res) => {
+  res.json({ articles: listArchive() });
+}));
+
 // ── API: detalle de artículo ──────────────────────────────────────────────────
 
 app.get('/api/articles/:id', asyncHandler('GET /api/articles/:id', async (req, res) => {
   const article = loadArticleOr404(req.params.id, res);
   if (!article) return;
   res.json({ article });
+}));
+
+// ── API: archivo — mover artículo manualmente ─────────────────────────────────
+//
+// El auto-archivado ocurre en listArticles(). Este endpoint permite al usuario
+// archivar manualmente un artículo desde la UI sin esperar al límite.
+// Sin gate: cualquier artículo puede archivarse, esté publicado o no.
+
+app.post('/api/articles/:id/archive', asyncHandler('POST /api/articles/:id/archive', async (req, res) => {
+  const { id } = req.params;
+  if (!loadArticleOr404(id, res)) return;
+  archiveArticle(id);
+  res.json({ success: true });
 }));
 
 // ── API: desaprobar artículo (Terminado → En Progreso) ────────────────────────

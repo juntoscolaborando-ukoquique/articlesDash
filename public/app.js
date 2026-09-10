@@ -42,6 +42,7 @@ const tabBtns         = document.querySelectorAll('.tab-btn');
 const countEdicion    = document.getElementById('count-edicion');
 const countTerminado  = document.getElementById('count-terminado');
 const countEnProgreso = document.getElementById('count-en-progreso');
+const countArchivo    = document.getElementById('count-archivo');
 
 let editingArticleId = null; // id del borrador abierto en la pantalla de Edición
 
@@ -100,6 +101,10 @@ function setActiveTab(tab) {
   if (tab === 'sitio') {
     viewList.style.display  = 'none';
     viewSite.style.display  = 'block';
+  } else if (tab === 'archivo') {
+    viewSite.style.display  = 'none';
+    viewList.style.display  = 'block';
+    loadArchive();
   } else {
     viewSite.style.display  = 'none';
     viewList.style.display  = 'block';
@@ -114,6 +119,8 @@ function updateTabCounts(data) {
   countEdicion.textContent    = edicion;
   countTerminado.textContent  = terminado;
   countEnProgreso.textContent = enProgreso;
+  // Archive count is loaded separately on demand — keep the span current
+  // without triggering a fetch; it gets set by loadArchive().
 }
 
 // ── View switching ────────────────────────────────────────────────────────────
@@ -329,6 +336,94 @@ async function loadArticles() {
   } catch (err) {
     // Table context: renderError() would produce <p> inside <tbody> (invalid HTML). escHtml() is intentional here.
     tbody.innerHTML = `<tr class="state-row"><td colspan="6">Error al cargar artículos: ${escHtml(err.message)}</td></tr>`;    showToast(`Error al cargar artículos: ${err.message}`, 'error');
+  }
+}
+
+// ── Archive tab ───────────────────────────────────────────────────────────────
+
+async function loadArchive() {
+  tbody.innerHTML = '<tr class="state-row"><td colspan="6">Cargando archivo…</td></tr>';
+  countEl.textContent = 'Archivo';
+  try {
+    const res = await fetch('/api/articles/archive');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const archived = data.articles ?? [];
+    countArchivo.textContent = archived.length;
+    renderArchiveTable(archived);
+  } catch (err) {
+    tbody.innerHTML = `<tr class="state-row"><td colspan="6">Error al cargar el archivo: ${escHtml(err.message)}</td></tr>`;
+    showToast(`Error al cargar el archivo: ${err.message}`, 'error');
+  }
+}
+
+function renderArchiveTable(data) {
+  tbody.innerHTML = '';
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr class="state-row"><td colspan="6">El archivo está vacío.</td></tr>';
+    countEl.textContent = 'Archivo — vacío';
+    return;
+  }
+
+  countEl.textContent = `Archivo — ${data.length} artículo${data.length !== 1 ? 's' : ''}`;
+
+  for (const article of data) {
+    const tr = document.createElement('tr');
+    tr.dataset.id = article.id;
+
+    // Title (read-only — archived articles can't be edited from the dashboard)
+    const tdTitle = document.createElement('td');
+    tdTitle.className = 'col-title';
+    const titleEl = document.createElement('span');
+    titleEl.className = 'article-title-link';
+    titleEl.style.color = 'var(--muted)';
+    titleEl.textContent = article.title || '(sin título)';
+    tdTitle.appendChild(titleEl);
+    if (article.descriptif) {
+      const descDiv = document.createElement('div');
+      descDiv.className = 'article-descriptif';
+      descDiv.textContent = article.descriptif;
+      tdTitle.appendChild(descDiv);
+    }
+
+    const tdSection = document.createElement('td');
+    tdSection.className = 'col-section';
+    tdSection.textContent = sectionLabel(article.section);
+
+    const tdDate = document.createElement('td');
+    tdDate.className = 'col-date';
+    tdDate.textContent = formatDate(article.date);
+
+    const tdStatus = document.createElement('td');
+    tdStatus.className = 'col-status';
+    tdStatus.innerHTML = `<span class="badge badge-${article.status}">${article.status}</span>`;
+
+    const tdSpip = document.createElement('td');
+    tdSpip.className = 'col-spip';
+    if (article.spipArticleId && article.publishedUrl) {
+      const a = document.createElement('a');
+      a.href = article.publishedUrl;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.className = 'spip-id';
+      a.textContent = `#${article.spipArticleId}`;
+      tdSpip.appendChild(a);
+    } else if (article.spipArticleId) {
+      const span = document.createElement('span');
+      span.className = 'spip-id';
+      span.textContent = `#${article.spipArticleId}`;
+      tdSpip.appendChild(span);
+    } else {
+      tdSpip.innerHTML = `<span class="spip-id" style="color:var(--border)">—</span>`;
+    }
+
+    // No action buttons — archive is read-only
+    const tdAction = document.createElement('td');
+    tdAction.className = 'col-action';
+
+    tr.append(tdTitle, tdSection, tdDate, tdStatus, tdSpip, tdAction);
+    tbody.appendChild(tr);
   }
 }
 
