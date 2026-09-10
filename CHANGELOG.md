@@ -5,6 +5,28 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.9.1] — 2026-09-10
+
+### Limpieza — Borrado de duplicados en "Tus artículos en curso"
+
+Verificación manual en SPIP de artículos en la sección "Tus artículos en curso"
+(status `en cours`). Se identificaron 4 duplicados históricamente y se borraron
+permanentemente los IDs antiguos, preservando las versiones más recientes:
+
+| Artículo | IDs Borrados | ID Preservado |
+|----------|--------------|---------------|
+| "cancer" | 97 | 103 |
+| "algo mas para plandemismo" | 96 | 102 |
+| "Dímelo todo" | 92 | 95 |
+| "Cola de zorro: una lección que viene de las plantas" | 88 | 89 |
+
+Nota: Estos duplicados no aparecían en el `live-write-audit.log.jsonl` local —
+fueron creados fuera de este sistema (posiblemente vía SPIP directo u otra
+herramienta de publicación anterior). El audit log ahora registra los 4 borrados
+permanentes (2026-09-10T19:12-19:18Z).
+
+---
+
 ## [1.9.0] — 2026-09-10
 
 ### Refactor — `app.js` dividido en módulos ES
