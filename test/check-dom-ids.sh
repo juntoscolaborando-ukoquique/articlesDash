@@ -2,7 +2,7 @@
 # test/check-dom-ids.sh
 #
 # Checks that every static id= declared in index.html has a matching
-# getElementById() call in app.js.
+# getElementById() call somewhere in public/js/*.js.
 #
 # Catches the "renamed an id in one file and forgot the other" class of bug.
 # Only checks HTML → JS (not JS → HTML) because ids created dynamically via
@@ -16,10 +16,10 @@ ALLOWLIST=(
 )
 
 HTML="${HTML:-public/index.html}"
-JS="${JS:-public/app.js}"
+JS_DIR="${JS_DIR:-public/js}"
 
 html_ids=$(grep -oP ' id="\K[^"]+' "$HTML" | sort -u)
-js_ids=$(grep -oP "getElementById\('\K[^']+" "$JS" | sort -u)
+js_ids=$(grep -ohP "getElementById\('\K[^']+" "$JS_DIR"/*.js | sort -u)
 
 missing=()
 while IFS= read -r id; do
@@ -36,15 +36,15 @@ while IFS= read -r id; do
 done <<< "$html_ids"
 
 if [[ ${#missing[@]} -eq 0 ]]; then
-  echo "✅ DOM id check passed — all static ids in index.html have a matching getElementById in app.js"
+  echo "✅ DOM id check passed — all static ids in index.html have a matching getElementById in public/js/*.js"
   exit 0
 else
-  echo "❌ DOM id mismatch — ids declared in index.html but never looked up in app.js:"
+  echo "❌ DOM id mismatch — ids declared in index.html but never looked up in public/js/*.js:"
   for id in "${missing[@]}"; do
     echo "   • $id"
   done
   echo ""
-  echo "Fix: add getElementById('ID') in app.js, remove the id from index.html,"
-  echo "or add it to ALLOWLIST in test/check-dom-ids.sh if it's intentionally JS-free."
+  echo "Fix: add getElementById('ID') in the relevant public/js/*.js module, remove the id"
+  echo "from index.html, or add it to ALLOWLIST in test/check-dom-ids.sh if it's intentionally JS-free."
   exit 1
 fi
