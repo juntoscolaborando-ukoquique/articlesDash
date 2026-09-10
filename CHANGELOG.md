@@ -5,6 +5,57 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.8.0] — 2026-09-10
+
+### Añadido — Auto-archivo con límites 100/200 + pestaña Archivo
+
+- `src/lib/articles-store.mjs`:
+  - `ARCHIVE_DIR` = `articles/archive/`
+  - `ARTICLES_LIMIT = 100` / `ARCHIVE_LIMIT = 200`
+  - `enforceArchiveLimit()`: se llama al inicio de cada `listArticles()`. Cuando
+    `articles/` supera 100 archivos, mueve los artículos publicados más antiguos
+    (por `publishedAt` ascendente) a `articles/archive/`. Nunca mueve artículos
+    sin publicar.
+  - `pruneArchive()`: cuando `articles/archive/` supera 200 archivos, borra los
+    más antiguos (por mtime). Único lugar del código donde se elimina un JSON
+    permanentemente sin acción del usuario.
+  - `archiveArticle(id)`: mueve manualmente un artículo al archivo.
+  - `listArchive()`: devuelve los artículos en `articles/archive/*.json` con el
+    mismo shape que `listArticles()`, ordenados por `publishedAt` descendente.
+
+- `src/server.mjs`:
+  - `GET /api/articles/archive` — devuelve `listArchive()`
+  - `POST /api/articles/:id/archive` — llama a `archiveArticle(id)`
+  - Orden de rutas corregido: `/archive` declarado antes de `/:id` para evitar
+    que Express capture "archive" como parámetro de id.
+
+- `public/app.js`:
+  - `countArchivo` DOM ref añadido.
+  - `setActiveTab('archivo')` llama a `loadArchive()`.
+  - `loadArchive()` + `renderArchiveTable()`: fetch `/api/articles/archive`,
+    renderiza filas de solo lectura (sin botones de acción), actualiza el span
+    `count-archivo`.
+
+- `public/index.html`:
+  - Pestaña "📦 Archivo" (`data-tab=archivo`, `id=count-archivo`).
+  - `.tab-btn-archivo` CSS.
+
+### Correcciones (patch 04-archive-bugs)
+
+- `articles-store.mjs` — `RESERVED_SLUGS`: `uniqueArticleId()` nunca produce
+  `"archive"` como id de artículo, lo que colisionaría con la ruta estática
+  `GET /api/articles/archive` haciendo el detalle del artículo inalcanzable.
+
+- `articles-store.mjs` — `enforceArchiveLimit()`: excluye artículos con
+  `spipArticleId` pero sin `publishedAt` (write-back parcial fallido). Ordenar
+  `''` los pondría primero en la cola de archivo, moviendo un artículo
+  recién publicado antes que los más antiguos.
+
+### Total suite
+145 tests + DOM id check.
+
+---
+
 ## [1.7.0] — 2026-09-10
 
 ### Añadido — Historial de publicaciones previas en SPIP
