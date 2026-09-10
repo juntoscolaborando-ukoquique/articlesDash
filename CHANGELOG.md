@@ -5,6 +5,45 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.9.0] — 2026-09-10
+
+### Refactor — `app.js` dividido en módulos ES
+
+El monolito `public/app.js` (~1700 líneas) se dividió en 10 módulos ES
+bajo `public/js/`. Zero cambios de comportamiento — división puramente
+estructural.
+
+| Módulo | Responsabilidad |
+|---|---|
+| `main.js` | Entry point: tabs, refresh, back, boot |
+| `state.js` | Estado mutable compartido (`articles`, `activeTab`, `editingArticleId`) |
+| `dom.js` | Referencias `getElementById` centralizadas |
+| `utils.js` | Toast, formatDate, escHtml, renderError, htmlToPlainText, textToParagraphHtml |
+| `api.js` | `postTransition` + todas las transiciones de workflow |
+| `list-view.js` | Tabla, tabs, archivo, renderizado de filas y handlers |
+| `detail-view.js` | Detalle de solo lectura, editor de campos (En Progreso), sanitizador HTML |
+| `editor.js` | Editor de borradores, historial local, guardar/enviar, nuevo artículo |
+| `site-admin.js` | Pestaña Sitio: cambio de estado, borrado, datalist |
+| `audit-report.js` | Panel de reconciliación del audit log |
+
+`public/index.html`: `<script src="app.js">` → `<script type="module" src="js/main.js">`.
+
+`test/check-dom-ids.sh`: actualizado para buscar en `public/js/*.js` en vez de `public/app.js`.
+
+`public/app.js`: preservado (no borrado) hasta verificar en producción.
+
+### Documentación
+
+- `src/lib/spip-admin.mjs` — `changeArticleStatus()`: comentario JSDoc
+  explicando que el gate "publie requiere aprobación explícita" es
+  responsabilidad del caller (distintos mecanismos por contexto: flag HTTP
+  en la API, env var en el CLI). Documenta el contrato para futuros callers.
+
+### Total suite
+145 tests + DOM id check.
+
+---
+
 ## [1.8.1] — 2026-09-10
 
 ### Corregido
