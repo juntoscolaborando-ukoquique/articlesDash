@@ -91,9 +91,14 @@ export async function publishArticleUseCase(article, options = {}) {
     // Playwright in unit tests. Never set this in production code.
     _spipClient,
     // Test seams for I/O — default to the real implementations.
-    _findSuccessEntry = findSuccessEntry,
-    _writeBack        = writeBack,
-    _writeBackToFile  = writeBackToFile,
+    _findSuccessEntry     = findSuccessEntry,
+    _writeBack            = writeBack,
+    _writeBackToFile      = writeBackToFile,
+    // Test seam: intercepts the durable failure log written when write-back
+    // fails twice. Without this seam, tests that exercise that path (e.g.
+    // "devuelve published-no-writeback si el write-back falla dos veces")
+    // append real entries to writeback-failures.log.jsonl on every run.
+    _logWriteBackFailure  = logWriteBackFailure,
   } = options;
 
   // ── 1. Chequeo de idempotencia ──────────────────────────────────────────
@@ -220,7 +225,7 @@ export async function publishArticleUseCase(article, options = {}) {
           `buscar manualmente en articles/ y correr --recover-from-log sobre esa ruta)`;
 
       // Log durable — independiente del toast del browser, que puede perderse.
-      logWriteBackFailure(article.id, result.articleId, publishedAt, retryErr);
+      _logWriteBackFailure(article.id, result.articleId, publishedAt, retryErr);
 
       return {
         status:          'published-no-writeback',

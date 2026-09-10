@@ -53,15 +53,34 @@ function makeWriteBackSpy() {
   };
 }
 
+/**
+ * Colector de llamadas a logWriteBackFailure — evita que los tests que
+ * fuerzan un fallo de write-back escriban entradas reales en
+ * writeback-failures.log.jsonl (ver CHANGELOG — bug de tests ensuciando el
+ * log de producción).
+ */
+function makeLogSpy() {
+  const calls = [];
+  return {
+    spy: calls,
+    logWriteBackFailure: (articleId, spipArticleId, publishedAt, error) => {
+      calls.push({ articleId, spipArticleId, publishedAt, error });
+    },
+  };
+}
+
 // ── Helpers de seams ─────────────────────────────────────────────────────────
 
 function ioSeams(overrides = {}) {
-  const wb = makeWriteBackSpy();
+  const wb  = makeWriteBackSpy();
+  const log = makeLogSpy();
   return {
-    _writeBack:        wb.writeBack,
-    _writeBackToFile:  wb.writeBackToFile,
-    _findSuccessEntry: () => null,   // sin audit log por defecto
-    _wb:               wb,           // acceso al spy desde los tests
+    _writeBack:           wb.writeBack,
+    _writeBackToFile:     wb.writeBackToFile,
+    _findSuccessEntry:    () => null,   // sin audit log por defecto
+    _logWriteBackFailure: log.logWriteBackFailure,
+    _wb:                  wb,           // acceso al spy desde los tests
+    _log:                 log,          // acceso al spy del logger desde los tests
     ...overrides,
   };
 }
@@ -165,6 +184,12 @@ describe('publishArticleUseCase — publicación normal', () => {
     assert.equal(result.spipArticleId, '42');
     assert.ok(result.writeBackFailed);
     assert.ok(result.recoverCommand, 'debe incluir el comando de recuperación');
+
+    // El fallo se registró vía el seam, no en el archivo real
+    // writeback-failures.log.jsonl — ver CHANGELOG.
+    assert.equal(seams._log.spy.length, 1);
+    assert.equal(seams._log.spy[0].articleId, 'test-articulo');
+    assert.equal(seams._log.spy[0].spipArticleId, '42');
   });
 });
 

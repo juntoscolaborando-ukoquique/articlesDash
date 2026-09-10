@@ -5,6 +5,40 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.8.1] — 2026-09-10
+
+### Corregido
+
+- `src/lib/publish-use-case.mjs` — `logWriteBackFailure` ahora se invoca a
+  través de un seam inyectable (`_logWriteBackFailure`), igual que
+  `_writeBack`/`_writeBackToFile`. Antes, el test "devuelve
+  published-no-writeback si el write-back falla dos veces"
+  (`test/publish-use-case.test.mjs`) ejercitaba el path real y escribía una
+  entrada verdadera en `writeback-failures.log.jsonl` en cada corrida de
+  `node --test` — el archivo acumuló 34 entradas idénticas
+  (`test-articulo` / `EROFS`) entre el 5 y el 10/09. Se agregó el spy
+  correspondiente en el test y se purgó el log (todas las entradas
+  coincidían con el patrón de test, ninguna era de producción real).
+
+- `articles/articulo-1788658811564.json` — el `contentHtml` contenía un
+  volcado JSON completo de otro artículo pegado como texto plano (envuelto
+  en `<p>`/`<br>` por `textToParagraphHtml`), en vez del HTML real. Como
+  consecuencia `topics` había quedado vacío (`[]`, el schema exige 2–6) y
+  `title`/`author`/`sourceSite` no reflejaban el contenido real. Es
+  exactamente el patrón que `looksLikeStructuredPaste()` existe para
+  detectar del lado del cliente; en este caso no llegó a interceptarse
+  antes de guardar. Se recuperó el JSON embebido, se reconstruyó el
+  `contentHtml` real quitando marcado no permitido por el schema
+  (`style=`, `<div>`, `<span>`, `<h2>` → `<h3>`) y se restauraron
+  `title`, `descriptif`, `topics` y `author`/`sourceSite`. El artículo pasa
+  `validateArticle` pero permanece en `workflowStatus: "en-progreso"` —el
+  auto-heal nunca promueve a Terminado, eso requiere revisión humana.
+
+### Total suite
+145 tests + DOM id check.
+
+---
+
 ## [1.8.0] — 2026-09-10
 
 ### Añadido — Auto-archivo con límites 100/200 + pestaña Archivo
