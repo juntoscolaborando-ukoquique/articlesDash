@@ -57,24 +57,84 @@ The Sitio section (`public/js/site-admin.js`) currently handles:
 
 ### What needs to be added
 
-#### 2A. Backend endpoint: `POST /api/site/find-local-duplicates`
+#### 2A. Extract shared utility: `normalizeTitle` function
+
+**File:** Create `src/lib/text-utils.mjs`
+
+```javascript
+/**
+ * text-utils.mjs — Utilities for text manipulation shared between backend
+ * and frontend (via public/js/utils.js). Single source of truth for
+ * normalization logic.
+ */
+
+/**
+ * Normalize a title for duplicate detection.
+ * Lowercase, remove diacritics, remove special chars, collapse whitespace.
+ * 
+ * @param {string} title
+ * @returns {string} normalized title
+ */
+export function normalizeTitle(title) {
+  return title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove diacritics (á→a, etc.)
+    .replace(/[^\w\s]/g, '')         // keep only alphanumerics + spaces
+    .replace(/\s+/g, ' ')            // collapse multiple spaces
+    .trim();
+}
+
+/**
+ * Extract numeric timestamp from article filename.
+ * Filenames like "articulo-1789123456789.json" encode Unix timestamp.
+ * 
+ * @param {string} filename
+ * @returns {number|null} Unix timestamp or null if not parseable
+ */
+export function extractTimestampFromFilename(filename) {
+  const match = filename.match(/articulo-(\d{13})/);
+  if (!match) return null;
+  return parseInt(match[1], 10);
+}
+```
+
+**Import in `src/server.mjs`:**
+```javascript
+import { normalizeTitle, extractTimestampFromFilename } from './lib/text-utils.mjs';
+```
+
+**Export from `public/js/utils.js` (reuse):**
+```javascript
+export function normalizeTitle(title) {
+  // Keep existing implementation, but note it should match backend
+  return title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+```
+
+---
+
+#### 2B. Backend endpoint: `POST /api/site/find-local-duplicates`
 
 **File:** `src/server.mjs`
 
 ```javascript
 app.post('/api/site/find-local-duplicates', asyncHandler('find duplicates', async (req, res) => {
-  const articles = listArticles();
+  const { sort = 'date', order = 'desc', published = 'all' } = req.query;
   
-  // Import the normalize function from the frontend
-  // (or reimplement here)
-  function normalizeTitle(title) {
-    return title
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // remove diacritics
-      .replace(/[^\w\s]/g, '')         // keep only alphanumerics + spaces
-      .replace(/\s+/g, ' ')            // collapse whitespace
-      .trim();
+  let articles = listArticles();
+  
+  // Optional filtering: published vs. unpublished
+  if (published === 'false') {
+    articles = articles.filter(a => !a.spipArticleId);
+  } else if (published === 'true') {
+    articles = articles.filter(a => a.spipArticleId);
   }
   
   const titleMap = new Map(); // normalizedTitle → array of articles
@@ -82,10 +142,28 @@ app.post('/api/site/find-local-duplicates', asyncHandler('find duplicates', asyn
   for (const article of articles) {
     const norm = normalizeTitle(article.title);
     if (!titleMap.has(norm)) titleMap.set(norm, []);
+    
+    const createdAt = extractTimestampFromFilename(article.filename);
+    const fileSize = (() => {
+      try {
+        const filePath = path.join(ARTICLES_DIR, article.filename);
+        return fs.statSync(filePath).size;
+      } catch {
+        return 0;
+      }
+    })();
+    
+    const wordCount = article.contentHtml
+      ? article.contentHtml.split(/\s+/).filter(w => w.length > 0).length
+      : 0;
+    
     titleMap.get(norm).push({
       id: article.id,
       filename: article.filename,
       title: article.title,
+      createdAt,         // Unix timestamp from filename
+      fileSize,          // bytes
+      wordCount,         // approximate word count
       workflowStatus: article.workflowStatus,
       spipArticleId: article.spipArticleId || null,
       valid: article.valid,
@@ -93,11 +171,29 @@ app.post('/api/site/find-local-duplicates', asyncHandler('find duplicates', asyn
     });
   }
   
+  // Find groups with > 1 article
   const duplicates = [];
   for (const [normalized, group] of titleMap) {
     if (group.length > 1) {
-      // Sort by most recent first (rough heuristic: later filenames)
-      group.sort((a, b) => b.filename.localeCompare(a.filename));
+      // Sort by date (newer first) unless requested otherwise
+      if (sort === 'date') {
+        group.sort((a, b) => {
+          if (order === 'asc') {
+            return (a.createdAt || 0) - (b.createdAt || 0);
+          } else {
+            return (b.createdAt || 0) - (a.createdAt || 0);
+          }
+        });
+      } else if (sort === 'size') {
+        group.sort((a, b) => {
+          if (order === 'asc') {
+            return a.fileSize - b.fileSize;
+          } else {
+            return b.fileSize - a.fileSize;
+          }
+        });
+      }
+      
       duplicates.push({ normalized, articles: group });
     }
   }
@@ -111,7 +207,15 @@ app.post('/api/site/find-local-duplicates', asyncHandler('find duplicates', asyn
 }));
 ```
 
-#### 2B. New endpoint: `DELETE /api/articles/:id` (for local cleanup)
+**Query string options:**
+- `?sort=date&order=desc` — sort by creation date, newest first (default)
+- `?sort=date&order=asc` — oldest first
+- `?sort=size&order=desc` — largest files first
+- `?published=false` — only unpublished articles
+- `?published=true` — only published articles
+- `?published=all` — all articles (default)
+
+#### 2C. New endpoint: `DELETE /api/articles/:id` (for local cleanup)
 
 **File:** `src/server.mjs`
 
@@ -125,68 +229,121 @@ app.delete('/api/articles/:id', asyncHandler('delete article file', async (req, 
     return res.status(404).json({ success: false, error: 'Artículo no encontrado' });
   }
   
-  // Prevent deletion of already-published articles (only delete unpublished drafts)
+  // Prevent deletion of already-published articles
   if (article.spipArticleId) {
     return res.status(400).json({
       success: false,
-      error: `No se puede borrar: artículo ya publicado en SPIP (#${article.spipArticleId}). Usa "Borrar de SPIP" primero.`
+      error: `No se puede borrar: artículo ya publicado en SPIP (#${article.spipArticleId}). ` +
+             `Para borrarlo del sitio, usa: Sitio → "Cambiar estado" a papelera → "Borrado permanente"`
     });
   }
   
-  // Check workflow status (only allow deletion of draft/early stages)
+  // Only allow deletion of draft/early stages (not even "terminado" without publication)
   if (!['edicion', 'en-progreso'].includes(article.workflowStatus)) {
     return res.status(400).json({
       success: false,
-      error: `No se puede borrar artículos en estado "${article.workflowStatus}". Solo borradores (edicion/en-progreso).`
+      error: `No se puede borrar artículos en estado "${article.workflowStatus}". ` +
+             `Solo se pueden eliminar borradores en edición o revisión.`
     });
   }
   
   try {
     const filePath = path.join(ARTICLES_DIR, article.filename);
+    const fileSize = fs.statSync(filePath).size;
+    
+    // Delete the file
     fs.unlinkSync(filePath);
     
-    // Log the deletion
+    // Log the deletion in audit log
     await guardedWrite({
       action: 'article.file.delete',
-      target: { id },
+      target: { id, filename: article.filename },
       dryRun: false,
-      execute: async () => ({ success: true }),
+      execute: async () => ({ 
+        success: true, 
+        filename: article.filename,
+        sizeBytes: fileSize
+      }),
     });
     
-    res.json({ success: true, message: `Artículo ${id} borrado.` });
+    res.json({ 
+      success: true, 
+      message: `Artículo ${id} borrado (${(fileSize / 1024).toFixed(1)} KB).`,
+      filename: article.filename,
+    });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ 
+      success: false, 
+      error: `Error al borrar archivo: ${err.message}. ` +
+             `Nota: puede ser recuperado desde git history: git checkout HEAD -- articles/${article.filename}`
+    });
   }
 }));
 ```
 
-#### 2C. Frontend UI in `public/js/site-admin.js`
+**Safety features:**
+- Blocks deletion if article has `spipArticleId` (must delete from SPIP first)
+- Blocks deletion unless workflow status is `edicion` or `en-progreso`
+- Logs deletion to audit log with filename and file size
+- Returns recovery hint (git history) in error message
+- No undo in UI (files can be recovered via git if needed)
+
+#### 2D. Frontend UI in `public/js/site-admin.js`
 
 ```javascript
+import { normalizeTitle } from './utils.js';
+
+/**
+ * Format Unix timestamp to readable date.
+ * Timestamps from filenames like "articulo-1789123456789.json"
+ */
+function formatTimestamp(timestamp) {
+  if (!timestamp) return '—';
+  const ms = timestamp < 1e10 ? timestamp * 1000 : timestamp;
+  return new Date(ms).toLocaleString('es-ES', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
 // New card in the Sitio section for duplicate finding
 export async function handleFindDuplicates() {
   const btn = document.getElementById('btn-find-duplicates');
   const result = document.getElementById('duplicates-result');
   
   btn.disabled = true;
+  btn.textContent = 'Buscando…';
   result.innerHTML = '<p>Buscando duplicados locales…</p>';
   
   try {
-    const res = await fetch('/api/site/find-local-duplicates', { method: 'POST' });
+    const res = await fetch('/api/site/find-local-duplicates?sort=date&order=desc', { 
+      method: 'POST' 
+    });
     const data = await res.json();
     
     if (!res.ok || !data.success) {
-      result.innerHTML = `<p class="err">Error: ${data.error}</p>`;
+      result.innerHTML = `<p class="err">❌ Error: ${data.error}</p>`;
       return;
     }
     
     if (data.duplicates.length === 0) {
-      result.innerHTML = '<p class="ok">✓ No se encontraron duplicados locales.</p>';
+      result.innerHTML = `<p class="ok">✓ No se encontraron duplicados locales (${data.total} artículos analizados).</p>`;
       return;
     }
     
     // Render duplicate groups
-    let html = `<h4>⚠️ ${data.duplicates.length} grupo(s) de duplicados encontrados:</h4>`;
+    let html = `<h4>⚠️ ${data.duplicates.length} grupo(s) de duplicados encontrados (de ${data.total} artículos):</h4>`;
     
     for (let i = 0; i < data.duplicates.length; i++) {
       const group = data.duplicates[i];
@@ -198,17 +355,28 @@ export async function handleFindDuplicates() {
       
       for (let j = 0; j < group.articles.length; j++) {
         const article = group.articles[j];
-        const isCanonical = j === 0;
+        const isCanonical = j === 0; // First (newest) is recommended
         const badge = isCanonical ? ' <span class="badge canonical">[Conservar]</span>' : '';
-        const spip = article.spipArticleId ? `SPIP #${article.spipArticleId}` : '—';
+        const spip = article.spipArticleId ? `<span class="spip-link">SPIP #${article.spipArticleId}</span>` : '<span class="spip-none">—</span>';
+        const createdDate = formatTimestamp(article.createdAt);
+        const fileSize = formatBytes(article.fileSize);
+        const wordCountText = article.wordCount > 0 ? ` / ${article.wordCount} palabras` : '';
         
         html += `
           <li>
             <input type="radio" name="group-${i}" value="${article.id}" ${isCanonical ? 'checked' : ''}>
-            <span class="title">${article.title}</span>
-            <span class="status">${article.workflowStatus}</span>
-            <span class="spip">${spip}</span>
-            ${badge}
+            <div class="dup-item-content">
+              <div class="dup-item-main">
+                <span class="title">${article.title}</span>
+                ${badge}
+              </div>
+              <div class="dup-item-meta">
+                <span class="status status-${article.workflowStatus}">${article.workflowStatus}</span>
+                ${spip}
+                <span class="date">${createdDate}</span>
+                <span class="filesize">${fileSize}${wordCountText}</span>
+              </div>
+            </div>
           </li>
         `;
       }
@@ -228,9 +396,10 @@ export async function handleFindDuplicates() {
     }
     
   } catch (err) {
-    result.innerHTML = `<p class="err">Error de red: ${err.message}</p>`;
+    result.innerHTML = `<p class="err">❌ Error de red: ${err.message}</p>`;
   } finally {
     btn.disabled = false;
+    btn.textContent = 'Buscar duplicados';
   }
 }
 
@@ -249,20 +418,21 @@ async function handleDeleteDuplicates(event) {
     .map(r => r.value);
   
   if (toDelete.length === 0) {
-    alert('Solo hay un artículo en este grupo.');
+    alert('Debes dejar al menos un artículo sin seleccionar (el que vas a conservar).');
     return;
   }
   
+  const deleteList = toDelete.join('\n  - ');
   const confirmed = confirm(
-    `Sobre ${toDelete.length} artículos duplicados:\n` +
-    toDelete.map(id => ` - ${id}`).join('\n') +
-    `\n\nConservar: ${selected}\n\n¿Continuar?`
+    `Vas a eliminar ${toDelete.length} artículos:\n\n  - ${deleteList}\n\nConservar: ${selected}\n\nEsta operación NO se puede deshacer. ¿Continuar?`
   );
   if (!confirmed) return;
   
   btn.disabled = true;
   btn.textContent = 'Borrando…';
+  const result = document.getElementById('duplicates-result');
   
+  let failed = [];
   for (const id of toDelete) {
     try {
       const res = await fetch(`/api/articles/${encodeURIComponent(id)}`, {
@@ -272,93 +442,172 @@ async function handleDeleteDuplicates(event) {
       
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || `Error al borrar ${id}`);
+        failed.push(`${id}: ${data.error}`);
       }
     } catch (err) {
-      alert(`❌ Error al borrar ${id}: ${err.message}`);
-      btn.disabled = false;
-      btn.textContent = 'Eliminar no seleccionados';
-      return;
+      failed.push(`${id}: ${err.message}`);
     }
   }
   
-  alert(`✅ ${toDelete.length} artículos borrados.`);
+  if (failed.length > 0) {
+    alert(`❌ Errores:\n\n${failed.join('\n')}`);
+    btn.disabled = false;
+    btn.textContent = 'Eliminar no seleccionados';
+    return;
+  }
+  
+  alert(`✅ ${toDelete.length} artículos borrados correctamente.`);
   group.remove();
-  if (result.children.length === 0) {
+  
+  const remaining = result.querySelectorAll('.duplicate-group');
+  if (remaining.length === 0) {
     result.innerHTML = '<p class="ok">✓ Todos los duplicados han sido eliminados.</p>';
   }
   
   btn.disabled = false;
+  btn.textContent = 'Eliminar no seleccionados';
 }
 
 // Wire up the button
 document.getElementById('btn-find-duplicates')?.addEventListener('click', handleFindDuplicates);
 ```
 
-#### 2D. HTML UI in `public/index.html`
+#### 2E. HTML UI in `public/index.html`
 
 Add to the Sitio section (inside `.site-card` container):
 
 ```html
 <div class="site-card">
   <h3>🔍 Duplicados locales</h3>
-  <p>Busca artículos con títulos similares en tus borradores.</p>
+  <p>Busca artículos con títulos similares en tus borradores y elige cuál conservar.</p>
   <button id="btn-find-duplicates">Buscar duplicados</button>
   <div id="duplicates-result"></div>
 </div>
 ```
 
-#### 2E. CSS in `public/index.html`
+#### 2F. CSS in `public/index.html`
 
 ```css
+/* Duplicate finder UI */
+
 .duplicate-group {
   border: 1px solid var(--muted);
   border-radius: 4px;
   padding: 12px;
-  margin: 8px 0;
+  margin: 12px 0;
+  background: var(--bg-secondary);
 }
 
 .duplicate-group h5 {
-  margin: 0 0 8px 0;
+  margin: 0 0 12px 0;
   font-weight: bold;
+  font-size: 1rem;
 }
 
 .duplicate-group ul {
   list-style: none;
   padding: 0;
-  margin: 8px 0;
+  margin: 0;
 }
 
 .duplicate-group li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 4px 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--muted);
   font-size: 0.9rem;
 }
 
-.duplicate-group .title {
-  flex: 1;
+.duplicate-group li:last-child {
+  border-bottom: none;
 }
 
-.duplicate-group .status {
-  background: var(--bg-secondary);
+.duplicate-group input[type="radio"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.dup-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.dup-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.dup-item-main .title {
+  font-weight: 500;
+  flex: 1;
+  min-width: 200px;
+}
+
+.dup-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.status {
+  background: var(--bg);
   padding: 2px 6px;
   border-radius: 2px;
+  border: 1px solid var(--muted);
+}
+
+.status-edicion {
+  border-color: var(--yellow);
+  background: rgba(255, 193, 7, 0.1);
+}
+
+.status-en-progreso {
+  border-color: var(--blue);
+  background: rgba(33, 150, 243, 0.1);
+}
+
+.status-terminado {
+  border-color: var(--green);
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.spip-link {
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.spip-none {
+  color: var(--muted);
+}
+
+.date {
   font-size: 0.8rem;
 }
 
-.duplicate-group .spip {
+.filesize {
+  font-size: 0.8rem;
   color: var(--muted);
-  font-size: 0.85rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  white-space: nowrap;
 }
 
 .badge.canonical {
   background: var(--green);
   color: white;
-  padding: 2px 6px;
-  border-radius: 2px;
-  font-size: 0.75rem;
 }
 
 .btn-delete-dup {
@@ -369,27 +618,68 @@ Add to the Sitio section (inside `.site-card` container):
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9rem;
+  margin-top: 8px;
+}
+
+.btn-delete-dup:hover:not(:disabled) {
+  background: var(--red-dark, #c62828);
+  opacity: 0.9;
 }
 
 .btn-delete-dup:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+#duplicates-result {
+  margin-top: 8px;
+}
+
+#duplicates-result .ok,
+#duplicates-result .err {
+  padding: 8px;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+
+#duplicates-result .ok {
+  background: rgba(76, 175, 80, 0.1);
+  color: var(--green);
+  border-left: 3px solid var(--green);
+}
+
+#duplicates-result .err {
+  background: rgba(244, 67, 54, 0.1);
+  color: var(--red);
+  border-left: 3px solid var(--red);
+}
 ```
 
 ### Effort estimate
 
-- Backend endpoints: 2 hours
-- Frontend UI + handlers: 2 hours
-- Testing: 1 hour
-- **Total: ~5 hours**
+- Create `text-utils.mjs`: 0.5 hours
+- Backend endpoints (with metadata, filtering, sorting): 3 hours
+- Frontend UI + handlers (with timestamps, file sizes, word counts): 2-3 hours
+- CSS styling: 1 hour
+- Testing: 1-2 hours
+- **Revised total: 7.5-9.5 hours** (increased from 5 hours due to enhancements)
 
-### Quick wins / Future enhancements
+### Key improvements over basic version
 
-1. **Display file size** — help users identify which duplicate is larger/more complete
-2. **Show creation date** — from filename (e.g., `articulo-1789123456789.json` → parse timestamp)
-3. **Merge functionality** — combine fields from both articles before deleting one
-4. **Undo button** — restore deleted article from git history (if needed)
+1. ✅ **Extracted `normalizeTitle`** — shared between backend/frontend, DRY principle
+2. ✅ **Rich metadata** — timestamps, file sizes, word counts to help decide canonical
+3. ✅ **Sorting & filtering** — by date or size, published/unpublished
+4. ✅ **Better audit logging** — captures filename and file size of deleted articles
+5. ✅ **Recovery hints** — error messages mention `git checkout` for file recovery
+6. ✅ **Improved UX** — clearer labels, status badges, better confirmation dialog
+7. ✅ **Accessibility** — form fields instead of plain text, better visual hierarchy
+
+### Quick wins / Future enhancements (if needed)
+
+1. **Merge functionality** — combine text from both articles before deleting
+2. **Undo via git** — add "Undo deletion" button that runs `git checkout HEAD -- articles/<filename>`
+3. **Batch operations** — delete entire group without selecting canonical
+4. **Export deleted list** — generate a report of what was deleted
 
 ---
 
@@ -500,15 +790,16 @@ This exists because SPIP only exposes a delete button in the trash UI, not in th
 
 ## Files to modify / create
 
-| File | Change | Effort |
-|------|--------|--------|
-| `REMOTE-MANAGE.md` | Create (document remote operations) | ✅ Done |
-| `src/server.mjs` | Add endpoints + handlers | 2 hours |
-| `public/js/site-admin.js` | Add duplicate UI logic | 1.5 hours |
-| `public/index.html` | Add card + CSS | 0.5 hours |
-| `src/lib/articles-store.mjs` | Maybe export `normalizeTitle` for reuse | 0.25 hours |
-| `IMPLEMENTATION-ANALYSIS.md` | Create (this file) | ✅ Done |
-| `test/` | Add tests for new endpoints | Optional (1-2 hours) |
+## Files to modify / create
+
+| File | Change | Effort | Notes |
+|------|--------|--------|-------|
+| `src/lib/text-utils.mjs` | Create (normalize title, timestamp extraction) | 0.5 hours | New file, single source of truth |
+| `src/server.mjs` | Add two endpoints + metadata extraction | 3 hours | Rich filtering, sorting, audit logging |
+| `public/js/site-admin.js` | Add duplicate finder UI + handlers | 2-3 hours | Timestamps, file sizes, word counts |
+| `public/index.html` | Add card + CSS | 1.5 hours | Styled metadata display |
+| `public/js/utils.js` | Ensure `normalizeTitle` is exported | 0.25 hours | For reuse in frontend |
+| `test/` | Add tests for new endpoints | Optional (1-2 hours) | Happy path + error cases |
 
 ---
 
