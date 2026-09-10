@@ -216,6 +216,14 @@ function renderRow(article) {
     tdSpip.innerHTML = `<span class="spip-id"><a href="${escHtml(article.publishedUrl)}" target="_blank" rel="noopener">#${escHtml(String(article.spipArticleId))}</a></span>`;
   } else if (article.spipArticleId) {
     tdSpip.innerHTML = `<span class="spip-id">#${escHtml(String(article.spipArticleId))}</span>`;
+  } else if (article.previousSpipIds?.length) {
+    // Article was previously published to SPIP but the marker was cleared.
+    // Show the old IDs in red as a warning — this article existed in SPIP before.
+    const warn = document.createElement('span');
+    warn.className = 'spip-id spip-id-stale';
+    warn.title = 'Este artículo fue publicado en SPIP anteriormente con este ID. El marcador local fue borrado (re-publicación pendiente).';
+    warn.textContent = article.previousSpipIds.map((id) => `#${id}`).join(', ');
+    tdSpip.appendChild(warn);
   } else {
     tdSpip.innerHTML = `<span class="spip-id" style="color:var(--border)">—</span>`;
   }

@@ -109,6 +109,25 @@ export function findArticleAbsolutePath(id) {
 export function listArticles() {
   if (!fs.existsSync(ARTICLES_DIR)) return [];
 
+  // Build a map of slug → all SPIP IDs ever created (including deleted ones)
+  // from the audit log. Used to flag articles that were previously published
+  // to SPIP even if the local JSON no longer has a spipArticleId marker.
+  const previousSpipIdsBySlug = new Map();
+  const auditLogPath = path.join(ARTICLES_DIR, '..', 'live-write-audit.log.jsonl');
+  if (fs.existsSync(auditLogPath)) {
+    for (const line of fs.readFileSync(auditLogPath, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.action === 'article.create' && entry.result === 'success' && entry.target?.id && entry.articleId) {
+          const slug = entry.target.id;
+          if (!previousSpipIdsBySlug.has(slug)) previousSpipIdsBySlug.set(slug, []);
+          previousSpipIdsBySlug.get(slug).push(String(entry.articleId));
+        }
+      } catch { /* malformed line — skip */ }
+    }
+  }
+
   return fs
     .readdirSync(ARTICLES_DIR)
     .filter((f) => f.endsWith('.json'))
@@ -157,6 +176,13 @@ export function listArticles() {
         valid,
         validationErrors,
         workflowStatus,
+        // IDs of any previous SPIP publications for this slug (from audit log),
+        // excluding the current spipArticleId. Non-empty means the article was
+        // published to SPIP before but the marker was cleared (deleted + re-publish
+        // pending, or write-back failed). The dashboard uses this to warn the user.
+        previousSpipIds: (previousSpipIdsBySlug.get(id) ?? []).filter(
+          (sid) => sid !== String(article.spipArticleId ?? '')
+        ),
       };
     })
     .filter(Boolean)
