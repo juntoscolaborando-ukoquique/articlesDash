@@ -319,6 +319,14 @@ export async function confirmExternalDeletion(spipId) {
 /**
  * Cambia el estado de un artículo SPIP.
  *
+ * ⚠️  GATE DE SEGURIDAD PARA `publie`: esta función no impone la restricción
+ * de "publicar requiere aprobación explícita" — esa responsabilidad es del
+ * caller, porque el mecanismo de aprobación es diferente en cada contexto:
+ *   - API (server.mjs):             req.body.approvePublishing === true
+ *   - CLI (manage-article-status):  process.env.KILO_APPROVE_PUBLISHING
+ * Si se añade un nuevo caller que pueda pasar `targetStatus === 'publie'`,
+ * DEBE implementar su propio gate antes de llamar a esta función.
+ *
  * @param {string|number} spipId — ID numérico del artículo en SPIP
  * @param {string} targetStatus — uno de VALID_SPIP_STATUSES
  * @param {object} [options]
