@@ -76,16 +76,25 @@ function slugify(title) {
 }
 
 /**
+ * Slugs that collide with static routes under /api/articles/*  (e.g.
+ * GET /api/articles/archive is matched before GET /api/articles/:id,
+ * so an article with id "archive" would be unreachable via the detail
+ * endpoint). Reserved so uniqueArticleId() never hands one out.
+ */
+const RESERVED_SLUGS = new Set(['archive']);
+
+/**
  * Devuelve un id único basado en `baseSlug`, agregando un sufijo numérico
- * si ya existe un artículo con ese id. Si `baseSlug` es null (título vacío
+ * si ya existe un artículo con ese id, o si colisiona con una ruta estática
+ * reservada (ver RESERVED_SLUGS). Si `baseSlug` es null (título vacío
  * o "Nuevo artículo" repetido), arranca de un slug con timestamp.
  */
 function uniqueArticleId(baseSlug) {
   const base = baseSlug || `articulo-${Date.now()}`;
-  if (!findArticleById(base)) return base;
+  if (!RESERVED_SLUGS.has(base) && !findArticleById(base)) return base;
 
   let n = 2;
-  while (findArticleById(`${base}-${n}`)) n += 1;
+  while (RESERVED_SLUGS.has(`${base}-${n}`) || findArticleById(`${base}-${n}`)) n += 1;
   return `${base}-${n}`;
 }
 
@@ -357,13 +366,17 @@ function enforceArchiveLimit() {
     const overflow = files.length - ARTICLES_LIMIT;
     if (overflow <= 0) return;
 
-    // Gather published articles with their publishedAt timestamp
+    // Gather published articles with their publishedAt timestamp.
+    // Articles with spipArticleId but no publishedAt (e.g. a pending
+    // write-back — see previousSpipIds handling above) are excluded rather
+    // than treated as "oldest": sorting a missing timestamp as '' would put
+    // a just-published article at the front of the archive queue.
     const candidates = [];
     for (const filename of files) {
       const filepath = path.join(ARTICLES_DIR, filename);
       const article = readArticleFile(filepath);
-      if (!article?.spipArticleId) continue; // never auto-archive unpublished
-      candidates.push({ filepath, filename, publishedAt: article.publishedAt ?? '' });
+      if (!article?.spipArticleId || !article?.publishedAt) continue;
+      candidates.push({ filepath, filename, publishedAt: article.publishedAt });
     }
 
     // Oldest published first
