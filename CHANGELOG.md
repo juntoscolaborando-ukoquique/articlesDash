@@ -5,6 +5,62 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.7.0] — 2026-09-10
+
+### Añadido — Historial de publicaciones previas en SPIP
+
+- `src/lib/articles-store.mjs` — `listArticles()` cruza el audit log en cada
+  lectura y añade `previousSpipIds[]` a cada artículo: IDs de publicaciones
+  anteriores en SPIP cuyo create-success no tiene un delete.permanent
+  correspondiente. Un array vacío significa "nunca publicado" o "todo borrado
+  limpiamente".
+
+- `public/app.js` — `renderRow()`: cuando `spipArticleId` es null pero
+  `previousSpipIds` no está vacío, la columna SPIP muestra los IDs anteriores
+  en rojo (`.spip-id-stale`) con tooltip explicativo. Señal de "este artículo
+  existió en SPIP — re-publicación pendiente".
+
+- `public/index.html` — `.spip-id-stale { color: var(--red); cursor: help }`.
+
+### Correcciones
+
+- `src/lib/articles-store.mjs` — ruta del audit log corregida: se derivaba de
+  `ARTICLES_DIR` (que puede estar sobreescrita por `ARTICLES_DIR_OVERRIDE` en
+  tests), ahora anclada a `__dirname` como `live-write-gateway.mjs` y
+  `spip-admin.mjs`. El bug hacía que `previousSpipIds` quedara vacío
+  silenciosamente en entornos de test.
+
+- `src/lib/articles-store.mjs` — `previousSpipIds` filtra IDs que tienen
+  entrada `delete.permanent success` en el log: un artículo borrado
+  intencionalmente no debe mostrar la advertencia roja. Mismo patrón que
+  `auditLogReport()` en `spip-admin.mjs`.
+
+- `articles/articulo-1788940900561.json` — `contentHtml` reparado: doble-escape
+  producido por `textToParagraphHtml()` aplicado sobre HTML ya formateado.
+  SPIP ID 125 (versión corrupta) borrado permanentemente y re-publicado como
+  ID 126 con el HTML correcto.
+
+- `articles/temoignage-et-suite-affaire-ronald-bernard-haute-finance.json` —
+  doble-escape HTML + 8 marcadores `[cite: 1]` eliminados. `workflowStatus`
+  → `en-progreso` para revisión antes de publicar.
+
+- `public/app.js` — dos bloques en `renderAuditReport()` (write-backs
+  perdidos, marcadores huérfanos) reescritos de `innerHTML` con interpolación
+  a creación DOM con `textContent` (XSS). Aplicado desde patch `01-app-js-xss`.
+
+- `articles/temoignage-et-suite-affaire-ronald-bernard-haute-finance.json` —
+  `section: "nom"` → `"nomfr"` (artículo FR en sección francesa correcta).
+  Aplicado desde patch `02-section-fix`.
+
+- Audit log sincronizado: IDs duplicados 111, 121, 123 confirmados como
+  borrados externamente vía `confirmExternalDeletion()`. Marcadores
+  `spipArticleId` stale eliminados de `grupo-por-verdad` y `per-la-realidad`.
+
+### Total suite
+145 tests + DOM id check.
+
+---
+
 ## [1.6.0] — 2026-09-09
 
 ### Añadido — Tests de integración de rutas + infraestructura de test
