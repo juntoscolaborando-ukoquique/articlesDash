@@ -144,6 +144,7 @@ export function listArticles() {
   // path from ARTICLES_DIR silently breaks this feature whenever the two
   // diverge, same edge case documented in spip-admin.mjs's auditLogReport().
   const previousSpipIdsBySlug = new Map();
+  const lastKnownSpipIdBySlug = new Map();
   const auditLogPath = path.join(__dirname, '..', '..', 'live-write-audit.log.jsonl');
   if (fs.existsSync(auditLogPath)) {
     const entries = fs
@@ -171,6 +172,17 @@ export function listArticles() {
       const slug = entry.target.id;
       if (!previousSpipIdsBySlug.has(slug)) previousSpipIdsBySlug.set(slug, []);
       previousSpipIdsBySlug.get(slug).push(String(entry.articleId));
+    }
+
+    // lastKnownSpipId: the most recent create-success SPIP ID for a slug,
+    // regardless of deletion status. Used as a historical reference when
+    // spipArticleId is null — shown muted in the dashboard, not as a warning.
+    // Iterating the same entries array avoids re-reading the log file.
+    for (const entry of entries) {
+      if (entry.action !== 'article.create' || entry.result !== 'success') continue;
+      if (!entry.target?.id || !entry.articleId) continue;
+      // Overwrite each time — log is append-only so last entry is most recent
+      lastKnownSpipIdBySlug.set(entry.target.id, String(entry.articleId));
     }
   }
 
@@ -229,6 +241,12 @@ export function listArticles() {
         previousSpipIds: (previousSpipIdsBySlug.get(id) ?? []).filter(
           (sid) => sid !== String(article.spipArticleId ?? '')
         ),
+        // Most recent SPIP ID ever assigned to this slug (including deleted ones).
+        // Shown as a muted historical reference when spipArticleId is null.
+        // null when the article was never published.
+        lastKnownSpipId: article.spipArticleId
+          ? null  // already shown via spipArticleId — no need to duplicate
+          : (lastKnownSpipIdBySlug.get(id) ?? null),
       };
     })
     .filter(Boolean)

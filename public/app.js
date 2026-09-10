@@ -231,6 +231,14 @@ function renderRow(article) {
     warn.title = 'Este artículo fue publicado en SPIP anteriormente con este ID. El marcador local fue borrado (re-publicación pendiente).';
     warn.textContent = article.previousSpipIds.map((id) => `#${id}`).join(', ');
     tdSpip.appendChild(warn);
+  } else if (article.lastKnownSpipId) {
+    // All previous SPIP copies confirmed deleted. Show last known ID as a
+    // muted historical reference — not an alert, just audit log info.
+    const ref = document.createElement('span');
+    ref.className = 'spip-id spip-id-history';
+    ref.title = `Publicado anteriormente como SPIP #${article.lastKnownSpipId} — borrado del sitio.`;
+    ref.textContent = `#${article.lastKnownSpipId} (borrado)`;
+    tdSpip.appendChild(ref);
   } else {
     tdSpip.innerHTML = `<span class="spip-id" style="color:var(--border)">—</span>`;
   }
