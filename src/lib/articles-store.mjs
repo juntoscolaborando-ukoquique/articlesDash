@@ -109,22 +109,45 @@ export function findArticleAbsolutePath(id) {
 export function listArticles() {
   if (!fs.existsSync(ARTICLES_DIR)) return [];
 
-  // Build a map of slug → all SPIP IDs ever created (including deleted ones)
+  // Build a map of slug → SPIP IDs created but never permanently deleted,
   // from the audit log. Used to flag articles that were previously published
   // to SPIP even if the local JSON no longer has a spipArticleId marker.
+  //
+  // NOTE: the audit log path is anchored to PROJECT_ROOT (__dirname-based),
+  // NOT derived from ARTICLES_DIR — ARTICLES_DIR can be overridden
+  // independently (e.g. ARTICLES_DIR_OVERRIDE in tests points at an
+  // unrelated tmp dir), and live-write-gateway.mjs always writes the real
+  // audit log to PROJECT_ROOT regardless of that override. Deriving the
+  // path from ARTICLES_DIR silently breaks this feature whenever the two
+  // diverge, same edge case documented in spip-admin.mjs's auditLogReport().
   const previousSpipIdsBySlug = new Map();
-  const auditLogPath = path.join(ARTICLES_DIR, '..', 'live-write-audit.log.jsonl');
+  const auditLogPath = path.join(__dirname, '..', '..', 'live-write-audit.log.jsonl');
   if (fs.existsSync(auditLogPath)) {
-    for (const line of fs.readFileSync(auditLogPath, 'utf8').split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.action === 'article.create' && entry.result === 'success' && entry.target?.id && entry.articleId) {
-          const slug = entry.target.id;
-          if (!previousSpipIdsBySlug.has(slug)) previousSpipIdsBySlug.set(slug, []);
-          previousSpipIdsBySlug.get(slug).push(String(entry.articleId));
-        }
-      } catch { /* malformed line — skip */ }
+    const entries = fs
+      .readFileSync(auditLogPath, 'utf8')
+      .split('\n')
+      .flatMap((line) => {
+        if (!line.trim()) return [];
+        try { return [JSON.parse(line)]; } catch { return []; }
+      });
+
+    // target.id has different semantics per action — 'article.create' uses
+    // the local slug, 'article.delete.permanent' uses the numeric SPIP id.
+    // Same rule as auditLogReport() in spip-admin.mjs; must not mix them.
+    const permanentlyDeletedSpipIds = new Set(
+      entries
+        .filter((e) => e.action === 'article.delete.permanent' && e.result === 'success')
+        .map((e) => String(e.target?.id))
+    );
+
+    for (const entry of entries) {
+      if (entry.action !== 'article.create' || entry.result !== 'success') continue;
+      if (!entry.target?.id || !entry.articleId) continue;
+      if (permanentlyDeletedSpipIds.has(String(entry.articleId))) continue; // deleted on purpose — nothing pending
+
+      const slug = entry.target.id;
+      if (!previousSpipIdsBySlug.has(slug)) previousSpipIdsBySlug.set(slug, []);
+      previousSpipIdsBySlug.get(slug).push(String(entry.articleId));
     }
   }
 
