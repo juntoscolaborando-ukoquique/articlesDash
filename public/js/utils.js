@@ -7,6 +7,7 @@
 'use strict';
 
 import { toastContainer, serverOfflineBanner, serverRetryBtn } from './dom.js';
+import { WS } from './state.js';
 
 // ── Toast ─────────────────────────────────────────────────────────────────
 
@@ -49,11 +50,11 @@ export function workflowStatusOf(article) {
   // so by the time it reaches here workflowStatus already reflects that.
   // Edición is never auto-assigned — it only shows up if a human sent the
   // article there explicitly, so no self-heal path leads here.
-  return article.workflowStatus ?? 'terminado';
+  return article.workflowStatus ?? WS.TERMINADO;
 }
 
 export function isTerminado(article) {
-  return workflowStatusOf(article) === 'terminado';
+  return workflowStatusOf(article) === WS.TERMINADO;
 }
 
 // ── XSS helper ────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@
 
 import { viewList, viewEditor, viewDetail, detailContent } from './dom.js';
 import { escHtml, formatDate, sectionLabel, renderError, showToast, htmlToPlainText, textToParagraphHtml, apiFetch } from './utils.js';
+import { WS } from './state.js';
 import { publishArticle, demoteArticle, promoteArticle, sendToEdicionArticle } from './api.js';
 import { loadArticles, showListView } from './list-view.js';
 
@@ -41,7 +42,7 @@ export function renderDetail(article) {
   const status = isPublished ? 'publicado' : 'listo';
   // GET /api/articles/:id devuelve el JSON crudo (loadArticle), no el objeto
   // mapeado de listArticles() — mismo default de ausencia que allá.
-  const isTerminadoDetail = (article.workflowStatus ?? 'terminado') === 'terminado';
+  const isTerminadoDetail = (article.workflowStatus ?? WS.TERMINADO) === WS.TERMINADO;
 
   const topicsHtml = Array.isArray(article.topics) && article.topics.length
     ? `<div class="topics-list">${article.topics.map((t) => `<span class="topic-chip">${escHtml(t)}</span>`).join('')}</div>`
@@ -108,7 +109,7 @@ export function renderDetail(article) {
       <div class="detail-footer">
         <span style="color:var(--muted); font-size:0.82rem">id: ${escHtml(article.id)}</span>
         <span>
-          ${article.workflowStatus === 'en-progreso'
+          ${article.workflowStatus === WS.EN_PROGRESO
             ? `<button class="copy-btn" id="detail-copy-btn" data-article-id="${escHtml(article.id)}">📋 Copiar contenido</button>`
             : ''
           }
@@ -164,7 +165,7 @@ export function renderDetail(article) {
   }
 
   // Copy button — only present for en-progreso articles
-  if (article.workflowStatus === 'en-progreso') {
+  if (article.workflowStatus === WS.EN_PROGRESO) {
     document.getElementById('detail-copy-btn').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
       const parts = [];

@@ -17,7 +17,7 @@ import {
   countEdicion, countTerminado, countEnProgreso, countArchivo,
   viewList, viewDetail, viewEditor, viewSite,
 } from './dom.js';
-import { state } from './state.js';
+import { state, WS } from './state.js';
 import { showToast, formatDate, sectionLabel, escHtml, workflowStatusOf, apiFetch } from './utils.js';
 import {
   publishArticle, demoteArticle, promoteArticle,
@@ -41,7 +41,7 @@ export function showListView() {
 export function setActiveTab(tab) {
   state.activeTab = tab;
   tabBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
-  newArticleBtn.style.display = tab === 'edicion' ? '' : 'none';
+  newArticleBtn.style.display = tab === WS.EDICION ? '' : 'none';
   if (tab === 'sitio') {
     viewList.style.display  = 'none';
     viewSite.style.display  = 'block';
@@ -57,8 +57,8 @@ export function setActiveTab(tab) {
 }
 
 export function updateTabCounts(data) {
-  const edicion    = data.filter((a) => workflowStatusOf(a) === 'edicion').length;
-  const terminado  = data.filter((a) => workflowStatusOf(a) === 'terminado').length;
+  const edicion    = data.filter((a) => workflowStatusOf(a) === WS.EDICION).length;
+  const terminado  = data.filter((a) => workflowStatusOf(a) === WS.TERMINADO).length;
   const enProgreso = data.length - edicion - terminado;
   countEdicion.textContent    = edicion;
   countTerminado.textContent  = terminado;
@@ -75,7 +75,7 @@ export function renderRow(article) {
 
   const isPublished = article.status === 'publicado';
   const workflowStatus = workflowStatusOf(article);
-  const isEdicion = workflowStatus === 'edicion';
+  const isEdicion = workflowStatus === WS.EDICION;
 
   // Title cell
   const tdTitle = document.createElement('td');
@@ -83,16 +83,16 @@ export function renderRow(article) {
   const titleBtn = document.createElement('button');
   titleBtn.className = 'article-title-link';
   titleBtn.textContent = article.title || '(sin título)';
-  titleBtn.title = isEdicion ? 'Seguir editando' : (workflowStatus === 'en-progreso' ? 'Editar campos' : 'Ver detalle');
+  titleBtn.title = isEdicion ? 'Seguir editando' : (workflowStatus === WS.EN_PROGRESO ? 'Editar campos' : 'Ver detalle');
   titleBtn.addEventListener('click', () => {
     if (isEdicion) return openEditor(article.id);
-    if (workflowStatus === 'en-progreso') return openFieldsEditor(article.id);
+    if (workflowStatus === WS.EN_PROGRESO) return openFieldsEditor(article.id);
     return openDetail(article.id); // terminado — sigue de solo lectura
   });
   tdTitle.appendChild(titleBtn);
   const hint = document.createElement('div');
   hint.className = 'title-hint';
-  hint.textContent = isEdicion ? 'Seguir editando →' : (workflowStatus === 'en-progreso' ? 'Editar campos →' : 'Ver detalle →');
+  hint.textContent = isEdicion ? 'Seguir editando →' : (workflowStatus === WS.EN_PROGRESO ? 'Editar campos →' : 'Ver detalle →');
   tdTitle.appendChild(hint);
   if (article.descriptif) {
     const descDiv = document.createElement('div');
@@ -134,7 +134,7 @@ export function renderRow(article) {
   // la celda queda vacía: el estado no aporta información útil al editor allí.
   const tdStatus = document.createElement('td');
   tdStatus.className = 'col-status';
-  if (workflowStatusOf(article) === 'terminado') {
+  if (workflowStatusOf(article) === WS.TERMINADO) {
     tdStatus.innerHTML = `<span class="badge badge-${article.status}">${article.status}</span>`;
   }
 
@@ -187,7 +187,7 @@ export function renderRow(article) {
       tdAction.appendChild(btn);
     }
     // Desaprobar — solo en Terminado. Manda el artículo a En Progreso.
-    if (workflowStatus === 'terminado') {
+    if (workflowStatus === WS.TERMINADO) {
       const demoteBtn = document.createElement('button');
       demoteBtn.className = 'demote-btn';
       demoteBtn.textContent = 'Desaprobar';
@@ -196,7 +196,7 @@ export function renderRow(article) {
       tdAction.appendChild(demoteBtn);
     }
     // Aprobar — solo en En Progreso. Manda el artículo a Terminado (gateado por validación).
-    if (workflowStatus === 'en-progreso') {
+    if (workflowStatus === WS.EN_PROGRESO) {
       const promoteBtn = document.createElement('button');
       promoteBtn.className = 'promote-btn';
       promoteBtn.textContent = 'Aprobar';
@@ -228,20 +228,20 @@ export function renderTable(data) {
 
   if (!filtered.length) {
     const emptyMessages = {
-      edicion:      'No hay borradores en Edición.',
-      'en-progreso': 'No hay artículos en progreso.',
-      terminado:    'No hay artículos listos para publicar.',
+      [WS.EDICION]:     'No hay borradores en Edición.',
+      [WS.EN_PROGRESO]: 'No hay artículos en progreso.',
+      [WS.TERMINADO]:   'No hay artículos listos para publicar.',
     };
     tbody.innerHTML = `<tr class="state-row"><td colspan="6">${emptyMessages[state.activeTab] ?? 'No hay artículos.'}</td></tr>`;
     countEl.textContent = 'Artículos';
     return;
   }
 
-  if (state.activeTab === 'terminado') {
+  if (state.activeTab === WS.TERMINADO) {
     const listos     = filtered.filter((a) => a.status === 'listo').length;
     const publicados = filtered.filter((a) => a.status === 'publicado').length;
     countEl.textContent = `Terminado — ${listos} listo${listos !== 1 ? 's' : ''}, ${publicados} publicado${publicados !== 1 ? 's' : ''}`;
-  } else if (state.activeTab === 'en-progreso') {
+  } else if (state.activeTab === WS.EN_PROGRESO) {
     countEl.textContent = `En Progreso — ${filtered.length} artículo${filtered.length !== 1 ? 's' : ''} para validar`;
   } else {
     countEl.textContent = `Edición — ${filtered.length} borrador${filtered.length !== 1 ? 'es' : ''}`;
@@ -409,7 +409,7 @@ export function handlePromote(e) {
         `⚠️ Posible título duplicado\n\n` +
         `"${article.title}"\n\n` +
         `es similar a:\n` +
-        `"${dup.title}" (${dup.workflowStatus ?? 'terminado'})\n\n` +
+        `"${dup.title}" (${dup.workflowStatus ?? WS.TERMINADO})\n\n` +
         `¿Querés aprobar igualmente?`
       );
       if (!confirmed) return;

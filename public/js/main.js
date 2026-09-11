@@ -11,6 +11,7 @@
 'use strict';
 
 import { refreshBtn, backBtn, tabBtns } from './dom.js';
+import { WS } from './state.js';
 import { loadArticles, setActiveTab, showListView } from './list-view.js';
 import { loadAllowedTagsFromSchema } from './detail-view.js';
 
@@ -25,7 +26,7 @@ import './audit-report.js';
 tabBtns.forEach((btn) => btn.addEventListener('click', () => setActiveTab(btn.dataset.tab)));
 refreshBtn.addEventListener('click', loadArticles);
 backBtn.addEventListener('click', showListView);
-document.getElementById('site-back-btn').addEventListener('click', () => setActiveTab('terminado'));
+document.getElementById('site-back-btn').addEventListener('click', () => setActiveTab(WS.TERMINADO));
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 

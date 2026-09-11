@@ -12,8 +12,22 @@
 
 'use strict';
 
+/**
+ * Workflow-status constants — the three states an article can be in on
+ * the local dashboard (not to be confused with SPIP's own statut field,
+ * which is always "prepa"). Use these instead of raw string literals so
+ * that a typo is a ReferenceError at load time, not a silent misroute.
+ *
+ * Backend equivalent: VALID_WORKFLOW_STATUSES in articles-store.mjs.
+ */
+export const WS = Object.freeze({
+  EDICION:     'edicion',
+  EN_PROGRESO: 'en-progreso',
+  TERMINADO:   'terminado',
+});
+
 export const state = {
   articles: [],
-  activeTab: 'terminado', // 'edicion' | 'en-progreso' | 'terminado'
-  editingArticleId: null, // id del borrador abierto en la pantalla de Edición
+  activeTab: WS.TERMINADO,  // default tab on load
+  editingArticleId: null,   // id of the draft open in the Edición screen
 };

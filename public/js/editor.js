@@ -14,7 +14,7 @@ import {
   editorSaveBtn, editorSendBtn, editorSaveStatus, editorBackBtn,
   draftHistoryPanel, draftHistoryList,
 } from './dom.js';
-import { state } from './state.js';
+import { state, WS } from './state.js';
 import { showToast, escHtml, htmlToPlainText, apiFetch } from './utils.js';
 import { sendToRevisionArticle } from './api.js';
 import { loadArticles, updateTabCounts, setActiveTab, showListView } from './list-view.js';
@@ -195,7 +195,7 @@ export async function handleEditorSend() {
   const id = state.editingArticleId;
   const ok = await sendToRevisionArticle(id, null, async () => {
     await loadArticles();
-    setActiveTab('en-progreso');
+    setActiveTab(WS.EN_PROGRESO);
     showListView();
   });
 
