@@ -13,6 +13,7 @@
 # Add an id here when the script flags it and you've confirmed it's deliberate.
 ALLOWLIST=(
   "audit-panel"
+  "server-offline-msg"
 )
 
 HTML="${HTML:-public/index.html}"

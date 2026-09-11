@@ -324,6 +324,41 @@
     .toast-success { background: #1e3d2e; color: var(--green); border: 1px solid var(--green); }
     .toast-error   { background: #3d1e1e; color: var(--red);   border: 1px solid var(--red); }
     .toast-info    { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+    /* ── Server offline banner ── */
+    #server-offline-banner {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 2000;
+      background: #3d1e1e;
+      color: var(--red);
+      border-bottom: 2px solid var(--red);
+      padding: 0.7rem 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.95rem;
+    }
+    #server-offline-banner[hidden] { display: none; }
+    #server-offline-banner code {
+      background: rgba(255,255,255,0.08);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    #server-offline-msg { flex: 1; }
+    #server-retry-btn {
+      background: transparent;
+      border: 1px solid var(--red);
+      color: var(--red);
+      padding: 0.3rem 0.8rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    #server-retry-btn:hover { background: rgba(255,80,80,0.15); }
+    #server-retry-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     @keyframes slideIn {
       from { transform: translateX(2rem); opacity: 0; }
       to   { transform: translateX(0);    opacity: 1; }
@@ -963,6 +998,12 @@
       </div>
       <div id="site-delete-result" class="site-result"></div>
     </div>
+  </div>
+
+  <!-- Server offline banner — hidden until a network error is detected -->
+  <div id="server-offline-banner" hidden>
+    <span id="server-offline-msg">⚠️ No se puede conectar con el servidor. Ejecuta <code>npm run dashboard</code> en la terminal.</span>
+    <button id="server-retry-btn">↺ Reintentar</button>
   </div>
 
   <div id="toast-container"></div>

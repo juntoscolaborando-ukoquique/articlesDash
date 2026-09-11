@@ -52,3 +52,6 @@ export const auditRefreshBtn = document.getElementById('audit-refresh-btn');
 export const auditVerifyBtn  = document.getElementById('audit-verify-btn');
 export const auditLoading    = document.getElementById('audit-loading');
 export const auditContent    = document.getElementById('audit-content');
+
+export const serverOfflineBanner = document.getElementById('server-offline-banner');
+export const serverRetryBtn      = document.getElementById('server-retry-btn');

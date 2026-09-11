@@ -80,7 +80,66 @@ export function renderError(el, err, prefix = 'Error') {
   el.innerHTML = `<p style="color:var(--red)">${escHtml(prefix)}: ${escHtml(msg)}</p>`;
 }
 
-// ── Plain-text <-> HTML conversion ───────────────────────────────────────
+// ── Server offline detection ──────────────────────────────────────────────
+
+/**
+ * Returns true when the error is a connectivity failure (fetch could not
+ * reach the server at all — not a 4xx/5xx HTTP response, which still means
+ * the server is up). Covers the Firefox "NetworkError" and Chrome
+ * "Failed to fetch" messages as well as generic TypeError from fetch.
+ */
+export function isNetworkError(err) {
+  if (!(err instanceof TypeError)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes('networkerror') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('load failed') ||
+    msg.includes('network request failed')
+  );
+}
+
+let _retryInterval = null;
+
+/**
+ * Show the persistent offline banner and start polling /api/articles every
+ * 3 s. When the server responds the banner is hidden automatically and the
+ * page reloads so the user sees fresh data.
+ */
+export function showOfflineBanner() {
+  // Lazy import to avoid circular dep (dom.js → utils.js is already present)
+  import('./dom.js').then(({ serverOfflineBanner, serverRetryBtn }) => {
+    if (!serverOfflineBanner) return;
+    serverOfflineBanner.hidden = false;
+
+    // Manual retry button
+    serverRetryBtn.addEventListener('click', () => _tryReconnect(serverOfflineBanner, serverRetryBtn), { once: true });
+
+    // Auto-poll every 3 s
+    if (_retryInterval) return; // already polling
+    _retryInterval = setInterval(() => _tryReconnect(serverOfflineBanner, serverRetryBtn), 3000);
+  });
+}
+
+async function _tryReconnect(banner, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Reintentando…';
+  try {
+    const res = await fetch('/api/articles', { method: 'GET' });
+    if (res.ok) {
+      clearInterval(_retryInterval);
+      _retryInterval = null;
+      banner.hidden = true;
+      window.location.reload();
+    } else {
+      btn.disabled = false;
+      btn.textContent = '↺ Reintentar';
+    }
+  } catch {
+    btn.disabled = false;
+    btn.textContent = '↺ Reintentar';
+  }
+}
 //
 // Duplicado intencional de htmlParagraphsToText() / textToParagraphHtml()
 // en src/lib/text-to-html.mjs. El frontend no tiene bundler, así que no
