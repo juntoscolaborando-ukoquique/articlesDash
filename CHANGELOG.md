@@ -5,7 +5,87 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.10.0] — 2026-09-11
+
+### Añadido — Banner de servidor desconectado
+
+- `public/js/utils.js` — `apiFetch(url, options)`: wrapper sobre `fetch()`
+  que detecta errores de conectividad (`TypeError: Failed to fetch` /
+  `NetworkError`) y activa automáticamente el banner de servidor offline.
+  Drop-in replacement para toda llamada a `fetch()` en el frontend; el resto
+  del código no necesita saber nada de detección de red.
+
+- `public/js/utils.js` — `isNetworkError(err)` + `showOfflineBanner()`:
+  el banner persiste en la parte superior de la página con el mensaje
+  "El servidor no está activo — ejecuta `npm run dashboard`" y un botón
+  "↺ Reintentar". Auto-polling cada 3 s: cuando el servidor responde, el
+  banner se oculta y la página se recarga sola.
+
+- `public/index.html` — `#server-offline-banner` + `#server-retry-btn`:
+  markup y CSS del banner. Oculto por defecto (`hidden`), se muestra solo
+  ante errores de red.
+
+- `public/js/dom.js` — `serverOfflineBanner` / `serverRetryBtn` exportados
+  como referencias centralizadas.
+
+### Corregido
+
+- `public/js/utils.js` — `showOfflineBanner()`: listener del botón de
+  reintento ahora se registra exactamente una vez (flag `_retryListenerAttached`),
+  evitando que múltiples fallos de red antes del primer click acumulen
+  listeners duplicados. Import dinámico de `dom.js` reemplazado por import
+  estático (no había ciclo de dependencia — el comentario que lo justificaba
+  era incorrecto). `_tryReconnect` simplificado a refs de módulo en vez de
+  parámetros.
+
+- `public/js/api.js` — `postTransition()`: catch block simplificado tras
+  delegar la detección de red a `apiFetch()`. Los 15 call sites de `fetch()`
+  en `list-view.js`, `editor.js`, `detail-view.js`, `audit-report.js`,
+  `site-admin.js` y `api.js` migrados a `apiFetch()` — cobertura completa
+  incluyendo `loadArticles()` en el arranque (el caso más probable de
+  encontrar el servidor apagado).
+
+### Refactor
+
+- `public/js/state.js` — `WS` (workflow-status constants): objeto `Object.freeze`
+  exportado con `WS.EDICION`, `WS.EN_PROGRESO`, `WS.TERMINADO`. Reemplaza
+  27 literales de cadena dispersos en 6 archivos (`'terminado'`,
+  `'en-progreso'`, `'edicion'`). Un typo como `WS.EN_PROGRESSO` ahora es un
+  `ReferenceError` en tiempo de carga en vez de un enrutamiento silencioso
+  incorrecto. Patrón consistente con `VALID_SPIP_STATUSES` en
+  `spip-admin.mjs` y `VALID_STATUSES` en `article-validator.mjs`.
+
+### Artículos
+
+- `articles/per-la-realidad-es-muy-diferente.json` — reparación completa:
+  - `chapo`: doble-escape HTML (`&lt;a href=...&gt;`) corregido a enlace real.
+  - `title`: punto reemplazado por dos puntos ("PER. La realidad…" → "PER: La realidad…").
+  - `soustitre`: reescrito para reflejar el argumento real del artículo (heredabilidad de la PER).
+  - `descriptif`: reescrito con precisión — nombra la Ley 18.033 y la falsedad que desmonta.
+  - `contentHtml`: texto en bruto con `\n` literales y título ajeno pegado al inicio
+    ("Amigos:\\nOtra gran mentira…") reestructurado en 4 secciones `<h3>` + párrafos `<p>`.
+    Oración truncada completada. Literal `\n` eliminados.
+  - `coverImage`: imagen de `canal7salta.com` (canal de TV argentino sin relación) eliminada.
+  - `topics`: añadidos `"per"` y `"derechos-humanos"` (de 4 a 6 tags).
+
+### Total suite
+145 tests + DOM id check.
+
+---
+
 ## [1.9.1] — 2026-09-10
+
+## [1.9.2] — 2026-09-11
+
+### Añadido — script de arranque y apertura automática del dashboard
+
+- `package.json`: nuevo script `start:open` que arranca el servidor local
+  (`node src/server.mjs`) y abre `http://localhost:3000` en el navegador
+  por defecto (Linux: `xdg-open`).
+- `README.md`: documentado `npm run start:open` en la sección "Dashboard web".
+
+---
+
 
 ### Limpieza — Borrado de duplicados en "Tus artículos en curso"
 
