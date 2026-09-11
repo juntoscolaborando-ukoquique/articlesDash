@@ -6,7 +6,7 @@
 
 'use strict';
 
-import { toastContainer } from './dom.js';
+import { toastContainer, serverOfflineBanner, serverRetryBtn } from './dom.js';
 
 // ── Toast ─────────────────────────────────────────────────────────────────
 
@@ -111,40 +111,37 @@ let _retryListenerAttached = false;
  * each guarded against being registered more than once.
  */
 export function showOfflineBanner() {
-  // Lazy import to avoid circular dep (dom.js → utils.js is already present)
-  import('./dom.js').then(({ serverOfflineBanner, serverRetryBtn }) => {
-    if (!serverOfflineBanner) return;
-    serverOfflineBanner.hidden = false;
+  if (!serverOfflineBanner) return;
+  serverOfflineBanner.hidden = false;
 
-    // Wire the retry button exactly once across all calls
-    if (!_retryListenerAttached) {
-      _retryListenerAttached = true;
-      serverRetryBtn.addEventListener('click', () => _tryReconnect(serverOfflineBanner, serverRetryBtn));
-    }
+  // Wire the retry button exactly once across all calls
+  if (!_retryListenerAttached) {
+    _retryListenerAttached = true;
+    serverRetryBtn.addEventListener('click', _tryReconnect);
+  }
 
-    // Auto-poll every 3 s — only one interval at a time
-    if (_retryInterval) return;
-    _retryInterval = setInterval(() => _tryReconnect(serverOfflineBanner, serverRetryBtn), 3000);
-  });
+  // Auto-poll every 3 s — only one interval at a time
+  if (_retryInterval) return;
+  _retryInterval = setInterval(_tryReconnect, 3000);
 }
 
-async function _tryReconnect(banner, btn) {
-  btn.disabled = true;
-  btn.textContent = 'Reintentando…';
+async function _tryReconnect() {
+  serverRetryBtn.disabled = true;
+  serverRetryBtn.textContent = 'Reintentando…';
   try {
     const res = await fetch('/api/articles', { method: 'GET' });
     if (res.ok) {
       clearInterval(_retryInterval);
       _retryInterval = null;
-      banner.hidden = true;
+      serverOfflineBanner.hidden = true;
       window.location.reload();
     } else {
-      btn.disabled = false;
-      btn.textContent = '↺ Reintentar';
+      serverRetryBtn.disabled = false;
+      serverRetryBtn.textContent = '↺ Reintentar';
     }
   } catch {
-    btn.disabled = false;
-    btn.textContent = '↺ Reintentar';
+    serverRetryBtn.disabled = false;
+    serverRetryBtn.textContent = '↺ Reintentar';
   }
 }
 //
