@@ -18,7 +18,7 @@ import {
   viewList, viewDetail, viewEditor, viewSite,
 } from './dom.js';
 import { state } from './state.js';
-import { showToast, formatDate, sectionLabel, escHtml, workflowStatusOf } from './utils.js';
+import { showToast, formatDate, sectionLabel, escHtml, workflowStatusOf, apiFetch } from './utils.js';
 import {
   publishArticle, demoteArticle, promoteArticle,
   sendToEdicionArticle, sendToRevisionArticle,
@@ -257,7 +257,7 @@ export function renderTable(data) {
 export async function loadArticles() {
   tbody.innerHTML = '<tr class="state-row"><td colspan="6">Cargando…</td></tr>';
   try {
-    const res = await fetch('/api/articles');
+    const res = await apiFetch('/api/articles');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     state.articles = data.articles ?? [];
@@ -276,7 +276,7 @@ export async function loadArchive() {
   tbody.innerHTML = '<tr class="state-row"><td colspan="6">Cargando archivo…</td></tr>';
   countEl.textContent = 'Archivo';
   try {
-    const res = await fetch('/api/articles/archive');
+    const res = await apiFetch('/api/articles/archive');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const archived = data.articles ?? [];

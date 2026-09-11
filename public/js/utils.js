@@ -80,7 +80,25 @@ export function renderError(el, err, prefix = 'Error') {
   el.innerHTML = `<p style="color:var(--red)">${escHtml(prefix)}: ${escHtml(msg)}</p>`;
 }
 
-// ── Server offline detection ──────────────────────────────────────────────
+// ── apiFetch — fetch wrapper with offline detection ───────────────────────
+//
+// Drop-in replacement for fetch() that calls showOfflineBanner() on network
+// errors (TypeError: Failed to fetch / NetworkError). All other behaviour
+// is identical — it resolves/rejects exactly as fetch() does, so existing
+// try/catch and res.ok checks continue to work unchanged.
+//
+// Every module that talks to the backend should use this instead of raw
+// fetch(), so the offline banner fires for every call site, not just the
+// postTransition() path in api.js.
+
+export async function apiFetch(url, options) {
+  try {
+    return await fetch(url, options);
+  } catch (err) {
+    if (isNetworkError(err)) showOfflineBanner();
+    throw err;
+  }
+}
 
 /**
  * Returns true when the error is a connectivity failure (fetch could not

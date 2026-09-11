@@ -17,6 +17,7 @@ import {
   siteStatusIdInput, siteStatusSelect, siteStatusBtn, siteStatusResult,
   siteDeleteIdInput, siteDeleteBtn, siteDeleteResult,
 } from './dom.js';
+import { apiFetch } from './utils.js';
 
 /**
  * Rellena el <datalist id="published-articles-list"> con los últimos 10
@@ -71,7 +72,7 @@ async function handleSiteStatusChange() {
     const body = { status };
     if (status === 'publie') body.approvePublishing = true;
 
-    const res  = await fetch(`/api/site/article/${encodeURIComponent(spipId)}/status`, {
+    const res  = await apiFetch(`/api/site/article/${encodeURIComponent(spipId)}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -108,7 +109,7 @@ async function handleSiteDelete() {
   setSiteResult(siteDeleteResult, 'Conectando con SPIP…', true);
 
   try {
-    const res  = await fetch(`/api/site/article/${encodeURIComponent(spipId)}/delete`, {
+    const res  = await apiFetch(`/api/site/article/${encodeURIComponent(spipId)}/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),

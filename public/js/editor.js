@@ -15,7 +15,7 @@ import {
   draftHistoryPanel, draftHistoryList,
 } from './dom.js';
 import { state } from './state.js';
-import { showToast, escHtml, htmlToPlainText } from './utils.js';
+import { showToast, escHtml, htmlToPlainText, apiFetch } from './utils.js';
 import { sendToRevisionArticle } from './api.js';
 import { loadArticles, updateTabCounts, setActiveTab, showListView } from './list-view.js';
 
@@ -43,7 +43,7 @@ export async function openEditor(id) {
   editorBodyInput.disabled     = true;
 
   try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
+    const res = await apiFetch(`/api/articles/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { article } = await res.json();
 
@@ -137,7 +137,7 @@ export async function saveDraft() {
   const text    = editorBodyInput.value;
 
   try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(state.editingArticleId)}/draft`, {
+    const res = await apiFetch(`/api/articles/${encodeURIComponent(state.editingArticleId)}/draft`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, section, text }),
@@ -208,7 +208,7 @@ export async function handleEditorSend() {
 export async function createNewArticle() {
   newArticleBtn.disabled = true;
   try {
-    const res = await fetch('/api/articles', {
+    const res = await apiFetch('/api/articles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: '' }),

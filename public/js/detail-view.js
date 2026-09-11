@@ -8,7 +8,7 @@
 'use strict';
 
 import { viewList, viewEditor, viewDetail, detailContent } from './dom.js';
-import { escHtml, formatDate, sectionLabel, renderError, showToast, htmlToPlainText, textToParagraphHtml } from './utils.js';
+import { escHtml, formatDate, sectionLabel, renderError, showToast, htmlToPlainText, textToParagraphHtml, apiFetch } from './utils.js';
 import { publishArticle, demoteArticle, promoteArticle, sendToEdicionArticle } from './api.js';
 import { loadArticles, showListView } from './list-view.js';
 
@@ -26,7 +26,7 @@ export function showDetailViewLoading() {
 export async function openDetail(id) {
   showDetailViewLoading();
   try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
+    const res = await apiFetch(`/api/articles/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { article } = await res.json();
     renderDetail(article);
@@ -198,7 +198,7 @@ export function renderDetail(article) {
 export async function openFieldsEditor(id) {
   showDetailViewLoading();
   try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
+    const res = await apiFetch(`/api/articles/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { article } = await res.json();
     renderFieldsEditor(article);
@@ -278,7 +278,7 @@ export function renderFieldsEditor(article) {
       sourceDate:  document.getElementById('fields-source-date').value,
     };
     try {
-      const res = await fetch(`/api/articles/${encodeURIComponent(article.id)}/fields`, {
+      const res = await apiFetch(`/api/articles/${encodeURIComponent(article.id)}/fields`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
@@ -344,7 +344,7 @@ let DETAIL_ALLOWED_TAGS = new Set([
 
 export async function loadAllowedTagsFromSchema() {
   try {
-    const res = await fetch('/api/schema/allowed-tags');
+    const res = await apiFetch('/api/schema/allowed-tags');
     if (!res.ok) return;
     const data = await res.json();
     if (Array.isArray(data.allowedTags) && data.allowedTags.length) {

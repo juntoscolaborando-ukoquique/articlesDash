@@ -23,7 +23,7 @@
 
 'use strict';
 
-import { showToast, isNetworkError, showOfflineBanner } from './utils.js';
+import { showToast, apiFetch } from './utils.js';
 
 async function postTransition(endpoint, {
   btn,
@@ -42,7 +42,7 @@ async function postTransition(endpoint, {
 
   let outcome;
   try {
-    const res = await fetch(endpoint, {
+    const res = await apiFetch(endpoint, {
       method: 'POST',
       ...(body !== undefined
         ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
@@ -51,12 +51,7 @@ async function postTransition(endpoint, {
     const data = await res.json();
     outcome = onResult(res, data);
   } catch (err) {
-    if (isNetworkError(err)) {
-      showOfflineBanner();
-      outcome = { success: false, restore: true, message: '⚠️ Servidor desconectado — ver banner arriba', toastType: 'error' };
-    } else {
-      outcome = { success: false, restore: true, message: `❌ Error de red: ${err.message}`, toastType: 'error' };
-    }
+    outcome = { success: false, restore: true, message: `❌ Error de red: ${err.message}`, toastType: 'error' };
   }
 
   showToast(outcome.message, outcome.toastType ?? 'error', outcome.toastDuration ?? 5000);

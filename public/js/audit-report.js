@@ -7,7 +7,7 @@
 'use strict';
 
 import { tabBtns, auditRefreshBtn, auditVerifyBtn, auditLoading, auditContent } from './dom.js';
-import { showToast, renderError } from './utils.js';
+import { showToast, renderError, apiFetch } from './utils.js';
 
 function fmtTs(ts) {
   if (!ts) return '—';
@@ -25,7 +25,7 @@ export async function loadAuditReport({ verify = false } = {}) {
   }
   try {
     const url  = verify ? '/api/site/audit-report?verify=true' : '/api/site/audit-report';
-    const res  = await fetch(url);
+    const res  = await apiFetch(url);
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error ?? 'Error desconocido');
     renderAuditReport(data.report);
@@ -243,7 +243,7 @@ async function handleMoveToPapelera(spipId, btn) {
   btn.disabled = true;
   btn.textContent = 'Enviando…';
   try {
-    const res  = await fetch(`/api/site/article/${encodeURIComponent(spipId)}/status`, {
+    const res  = await apiFetch(`/api/site/article/${encodeURIComponent(spipId)}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'poubelle' }),
@@ -280,7 +280,7 @@ async function handleConfirmExternalDeletion(spipId, btn) {
   btn.disabled = true;
   btn.textContent = 'Confirmando…';
   try {
-    const res  = await fetch(`/api/site/duplicates/${encodeURIComponent(spipId)}/confirm-deleted`, {
+    const res  = await apiFetch(`/api/site/duplicates/${encodeURIComponent(spipId)}/confirm-deleted`, {
       method: 'POST',
     });
     const data = await res.json();
@@ -304,7 +304,7 @@ async function handleRecover(slug, btn) {
   btn.textContent = 'Recuperando…';
   const resultEl = btn.nextElementSibling;
   try {
-    const res  = await fetch(`/api/articles/${encodeURIComponent(slug)}/recover`, {
+    const res  = await apiFetch(`/api/articles/${encodeURIComponent(slug)}/recover`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
