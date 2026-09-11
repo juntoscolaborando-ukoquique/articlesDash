@@ -100,11 +100,15 @@ export function isNetworkError(err) {
 }
 
 let _retryInterval = null;
+let _retryListenerAttached = false;
 
 /**
  * Show the persistent offline banner and start polling /api/articles every
  * 3 s. When the server responds the banner is hidden automatically and the
  * page reloads so the user sees fresh data.
+ *
+ * Safe to call multiple times — the retry listener and the poll interval are
+ * each guarded against being registered more than once.
  */
 export function showOfflineBanner() {
   // Lazy import to avoid circular dep (dom.js → utils.js is already present)
@@ -112,11 +116,14 @@ export function showOfflineBanner() {
     if (!serverOfflineBanner) return;
     serverOfflineBanner.hidden = false;
 
-    // Manual retry button
-    serverRetryBtn.addEventListener('click', () => _tryReconnect(serverOfflineBanner, serverRetryBtn), { once: true });
+    // Wire the retry button exactly once across all calls
+    if (!_retryListenerAttached) {
+      _retryListenerAttached = true;
+      serverRetryBtn.addEventListener('click', () => _tryReconnect(serverOfflineBanner, serverRetryBtn));
+    }
 
-    // Auto-poll every 3 s
-    if (_retryInterval) return; // already polling
+    // Auto-poll every 3 s — only one interval at a time
+    if (_retryInterval) return;
     _retryInterval = setInterval(() => _tryReconnect(serverOfflineBanner, serverRetryBtn), 3000);
   });
 }
