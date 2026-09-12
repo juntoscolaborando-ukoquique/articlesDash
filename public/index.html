@@ -405,6 +405,13 @@
       vertical-align: middle;
     }
     .tab-btn.active .tab-count { background: rgba(200,168,75,0.2); color: var(--accent); }
+    /* Per-tab active colours */
+    .tab-btn[data-tab="edicion"].active       { color: #c8a84b; border-bottom-color: #c8a84b; }
+    .tab-btn[data-tab="edicion"].active .tab-count { background: rgba(200,168,75,0.2); color: #c8a84b; }
+    .tab-btn[data-tab="en-progreso"].active   { color: #e07b2a; border-bottom-color: #e07b2a; }
+    .tab-btn[data-tab="en-progreso"].active .tab-count { background: rgba(224,123,42,0.2); color: #e07b2a; }
+    .tab-btn[data-tab="terminado"].active     { color: #a78bfa; border-bottom-color: #a78bfa; }
+    .tab-btn[data-tab="terminado"].active .tab-count { background: rgba(167,139,250,0.2); color: #a78bfa; }
 
     /* ── Validation errors (En Progreso tab) ── */
     .validation-errors {
