@@ -10,7 +10,7 @@
 import { viewList, viewEditor, viewDetail, detailContent } from './dom.js';
 import { escHtml, formatDate, sectionLabel, renderError, showToast, htmlToPlainText, textToParagraphHtml } from './utils.js';
 import { publishArticle, demoteArticle, promoteArticle, sendToEdicionArticle } from './api.js';
-import { loadArticles, showListView } from './list-view.js';
+import { loadArticles, showListView, focusArticleInList } from './list-view.js';
 
 // ── View switching ────────────────────────────────────────────────────────
 
@@ -321,12 +321,11 @@ export function renderFieldsEditor(article) {
 
   document.getElementById('fields-promote-btn').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
-    // Guarda antes de aprobar — Aprobar valida contra el JSON en disco, no
-    // contra lo que hay sin guardar en el formulario.
     if (!(await saveFields())) return;
     promoteArticle(article.id, btn, async () => {
       await loadArticles();
       showListView();
+      focusArticleInList(article.id);
     });
   });
 
@@ -336,6 +335,7 @@ export function renderFieldsEditor(article) {
     sendToEdicionArticle(article.id, btn, async () => {
       await loadArticles();
       showListView();
+      focusArticleInList(article.id);
     });
   });
 }

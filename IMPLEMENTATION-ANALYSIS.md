@@ -813,3 +813,62 @@ This exists because SPIP only exposes a delete button in the trash UI, not in th
 3. **Issue 3 (direct deletion):** 🔴 Not recommended → trade-off: safety > convenience
 
 **Recommended next step:** Implement Issue 2 (duplicates in Sitio), starting with backend endpoints.
+---
+
+## Running the Dashboard UI
+
+The project includes a web-based dashboard for managing articles without using the terminal.
+
+### Startup Commands
+
+```bash
+# Basic server startup
+npm start
+# or
+npm run dashboard
+
+# Server startup with automatic browser opening (Linux)
+npm run start:open
+```
+
+### Accessing the Dashboard
+
+Once the server is running, open your browser to:
+```
+http://localhost:3000
+```
+
+### Dashboard Features
+
+The dashboard provides:
+1. **Article Management**: View all articles in `articles/` directory with filtering by workflow status
+2. **Publication**: One-click publishing to SPIP
+3. **Workflow Management**: Move articles between "Edición", "En Progreso", and "Terminado" states
+4. **Site Administration**: Direct SPIP operations (status changes, deletions, audit log reconciliation)
+5. **Duplicate Detection**: Find and manage duplicate articles
+
+### Technical Details
+
+- **Backend**: Express.js server (`src/server.mjs`)
+- **Frontend**: Vanilla JavaScript without frameworks (`public/js/`)
+- **Port**: Default is 3000 (configurable via environment variables)
+- **Data Storage**: All data is stored in `articles/` JSON files
+
+### Environment Configuration
+
+The dashboard requires `.env` configuration for SPIP credentials:
+```bash
+SPIP_PASSWORD=your_password_here
+```
+
+For development/testing without SPIP access, use dry-run mode in the publication workflow.
+
+### Troubleshooting
+
+If the dashboard fails to start:
+1. Check Node.js version (requires 20+)
+2. Verify dependencies are installed: `npm install`
+3. Ensure Playwright is installed: `npx playwright install chromium`
+4. Check for port conflicts (another service may be using port 3000)
+
+The dashboard is production-ready for local use but designed for single-user access to the local file system.

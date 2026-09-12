@@ -123,6 +123,11 @@
     }
     tbody tr:last-child { border-bottom: none; }
     tbody tr:hover { background: rgba(255,255,255,0.03); }
+    @keyframes rowFlash {
+      0%   { background: rgba(99, 179, 237, 0.35); }
+      100% { background: transparent; }
+    }
+    tbody tr.row-highlight { animation: rowFlash 1.8s ease-out forwards; }
     tbody td {
       padding: 0.85rem 1rem;
       vertical-align: top;

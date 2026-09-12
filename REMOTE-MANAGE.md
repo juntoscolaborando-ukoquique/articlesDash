@@ -400,7 +400,49 @@ Es normal. Estamos usando Playwright (un navegador real) para:
 
 ---
 
-## 11. Inspección de contenido remoto
+## 11. Búsqueda de artículos en SPIP por nombre
+
+Para verificar si un artículo existe en SPIP (independientemente de si tiene
+marcador local `spipArticleId` o no):
+
+```bash
+node src/scripts/search-spip-articles.mjs "<término>"
+```
+
+**Ejemplos:**
+
+```bash
+node src/scripts/search-spip-articles.mjs "Semillas del Barrio"
+node src/scripts/search-spip-articles.mjs "haute finance"
+node src/scripts/search-spip-articles.mjs "fauci"
+```
+
+**Salida (stdout):**
+```json
+[
+  { "id": "129", "title": "La haute finance luciférienne…", "url": "https://…/ecrire/?exec=article&id_article=129" },
+  …
+]
+```
+
+Mensajes de progreso van a stderr — la salida JSON es limpia y redirigible:
+
+```bash
+node src/scripts/search-spip-articles.mjs "Semillas" > tmp/resultados.json
+```
+
+Usa el motor de búsqueda interno de SPIP (`?exec=recherche`) y devuelve
+todos los artículos en cualquier estado (prepa, publie, poubelle, etc.).
+Velocidad: ~15-30 s (requiere Playwright + login SSO).
+
+**Cuándo usarlo:**
+- Verificar si un artículo fue publicado manualmente fuera del pipeline
+- Confirmar que un borrador local todavía no existe en SPIP antes de publicar
+- Encontrar el SPIP ID de un artículo que no tiene marcador `spipArticleId` local
+
+---
+
+## 12. Inspección de contenido remoto
 
 ### Leer todos los campos de un artículo SPIP
 
@@ -447,9 +489,36 @@ estado remoto con el JSON local.
 
 ---
 
-## 12. Resumen de comandos
+## 13. Archivar artículos ya publicados
+
+Los artículos con `spipArticleId` se archivan automáticamente al publicarse
+(desde la versión 1.15.0). Si el dashboard acumula artículos publicados de
+sesiones anteriores, usa este script de mantenimiento:
 
 ```bash
+# Previsualizar qué se movería (sin tocar nada)
+node src/scripts/archive-published-articles.mjs --dry-run
+
+# Archivar todos los artículos con spipArticleId
+node src/scripts/archive-published-articles.mjs
+```
+
+**Qué hace:** mueve a `articles/archive/` todos los JSON locales que tienen
+`spipArticleId`. Operación local pura — no conecta a SPIP ni abre navegador.
+
+**Cuándo usarlo:**
+- Después de actualizar desde una versión anterior a 1.15.0
+- Mantenimiento periódico si el dashboard se ve cargado
+- Tras una sesión de publicación masiva
+
+---
+
+## 14. Resumen de comandos
+
+```bash
+# Búsqueda en SPIP
+node src/scripts/search-spip-articles.mjs "<término>"   # buscar por nombre/texto
+
 # Lectura
 npm run audit -- --report                      # Scan local de duplicados
 npm run status -- --inspect --id <id>          # Ver estado actual de un artículo
@@ -466,13 +535,17 @@ npm run delete-article -- --id <id>
 # Recuperación
 node src/publish-article.mjs <file.json> --recover-from-log
 
+# Archivo local (sin conexión a SPIP)
+node src/scripts/archive-published-articles.mjs --dry-run  # previsualizar
+node src/scripts/archive-published-articles.mjs            # archivar publicados
+
 # Dashboard (local)
 npm run dashboard    # Inicia en http://localhost:3000
 ```
 
 ---
 
-## 13. Contacto y reportes
+## 15. Contacto y reportes
 
 Si encuentras inconsistencias entre el audit log y SPIP real:
 1. Ejecuta `npm run audit -- --report` (snapshot local)

@@ -1,0 +1,29 @@
+{
+  "_schema_version": "1.0",
+  "id": "elisa-mato-a-ruth-falsos-positivos-vih",
+  "language": "ES",
+  "section": "nom",
+  "surtitre": "HISTORIA MÉDICA OCULTA",
+  "title": "ELISA mató a Ruth: Los falsos positivos del VIH y el montaje del SIDA",
+  "soustitre": "Novela testimonial sobre las víctimas atrapadas en tests no fiables y el precedente histórico del montaje COVID",
+  "descriptif": "Relato ficticio basado en casos reales de falsos positivos en pruebas ELISA de VIH, explorando el impacto social de diagnósticos erróneos y su paralelismo con la crisis COVID-19.",
+  "chapo": "<p><strong>'ELISA MATÓ A RUTH' - EL MONTAJE SIDA, FUE EL ANTECESOR AL MONTAJE COVID - LA HISTORIA SE REPITE... SÓLO CAMBIÓ EL GRUPO OBJETIVO - DEL GENOCIDIO SIDA AL HUMANICIDIO COVID-19.</strong></p>",
+  "contentHtml": "<h3>PRÓLOGO</h3>\n<p>«El nombre de la enfermedad importa menos que el nombre de la prueba. La prueba es la puerta. Y la puerta siempre está cerrada del mismo lado.»<br>— Cuaderno de Ruth Montoya, 1987</p>\n<h3>PRIMERA PARTE: EL DIAGNÓSTICO</h3>\n<h4>Capítulo 1 — La sala de espera</h4>\n<p>Ruth Montoya llevó el sobre cerrado en el bolsillo del abrigo durante tres días antes de abrirlo. No era miedo. Era algo peor: la certeza intuitiva de que lo que había dentro cambiaría todo, y no para bien.</p>\n<p>Había visto lo que pasaba con las mujeres de su barrio que recibían «la llamada». Primero la citación. Luego el test. Luego ELISA. Luego el estigma. Luego la desaparición lenta —primero social, luego física—.</p>\n<h4>Capítulo 2 — ELISA</h4>\n<p>La enfermera le tomó la sangre con eficiencia mecánica. «Los resultados tardan una semana. Si sale reactivo, le llamaremos para una prueba confirmatoria.»</p>\n<p>Ruth no entendió que «reactivo» no significaba «enfermo». Nadie le dijo que el ELISA de primera generación tenía una tasa de falsos positivos que variaba según la población. Nadie le mencionó que el embarazo, las enfermedades autoinmunes o una gripe reciente podían hacer que su sangre reaccionara sin que el virus estuviera ahí.</p>\n<h4>Capítulo 3 — El Western blot que nunca llegó</h4>\n<p>Ruth volvió al hospital. Le extrajeron sangre otra vez. Le dijeron que el Western blot tardaría dos semanas más. Pero esas dos semanas nunca existieron para ella, porque un residente joven, con cansancio acumulado y demasiados expedientes sobre la mesa, anotó en su historial: VIH+ basándose solo en el ELISA.</p>\n<h4>Capítulo 4 — La sentencia</h4>\n<p>Su marido la miró con ojos que ya no eran los mismos. «¿Con quién estuviste?»<br>«Con nadie. Te lo juro.»<br>«Entonces cómo.»<br>«No sé. No sé.»</p>\n<p>No supo explicarle que el test podía estar equivocado porque ella misma no sabía que podía estar equivocado. Nadie se lo había dicho.</p>\n<h3>SEGUNDA PARTE: LOS QUE NO CREYERON</h3>\n<h4>Capítulo 5 — El Club de los Vivientes</h4>\n<p>Quince años después de la muerte de Ruth, en un sótano del barrio de Lavapiés en Madrid, un grupo de personas se reunía cada jueves alrededor de una mesa con café y galletas saladas. Se llamaban a sí mismos «Los Vivientes».</p>\n<h4>Capítulo 6 — El argumento de la sensibilidad</h4>\n<p>«El ELISA se diseña para que sea altamente sensible. Eso significa que prefiere dar un falso positivo antes que un falso negativo. Es la lógica del screening: no dejar escapar ningún caso real. Pero esa lógica tiene una consecuencia: en poblaciones con baja prevalencia, la mayoría de los reactivos son falsos positivos.»</p>\n<h3>TERCERA PARTE: DEL SIDA AL COVID</h3>\n<h4>Capítulo 7 — Los tests de antígenos</h4>\n<p>«La historia se repite. Sólo cambió el grupo objetivo.» Eso dijo Aurora en la conferencia de Vallecas. Y tenía razón a medias.</p>\n<p>Los tests rápidos de antígenos para COVID-19 heredaron el mismo problema de base: alta sensibilidad, especificidad variable, y un contexto de pánico donde un resultado positivo —aunque fuera falso— desencadenaba cuarentenas, estigma y pérdida de ingresos.</p>\n<h3>EPÍLOGO</h3>\n<p>Ruth Montoya murió porque un test se confundió con una verdad. Los que la convirtieron en bandera de una negación total cometieron el mismo error: convirtieron una duda legítima en una certeza absoluta.</p>\n<p>Y las víctimas —las de los tests fallidos, las de la enfermedad real, las de la desinformación, las del estigma— siguen atrapadas en el medio.</p>\n<p>Porque cuando todo el mundo tiene una verdad absoluta, los que pierden son los que solo tienen preguntas.</p>\n<h3>NOTA DEL AUTOR</h3>\n<p>Esta es una obra de ficción. Ruth Montoya no existió. Los personajes son inventados. Pero las ideas que defienden son reales. Existió un debate —amargo, violento, costoso en vidas— sobre la validez de las pruebas del VIH. Existieron falsos positivos en ELISA. Existen problemas de sensibilidad en las pruebas rápidas de antígenos para COVID-19.</p>",
+  "ps": "<p>Obra de ficción basada en debates históricos sobre validez de pruebas diagnósticas y paralelismos entre crisis del SIDA y COVID-19.</p>",
+  "author": "Anónimo",
+  "sourceSite": "Archivos históricos médicos",
+  "sourceUrl": "",
+  "sourceDate": "2026-08-27",
+  "date": "2026-08-27",
+  "topics": [
+    "vih-sida",
+    "falsos-positivos",
+    "tests-diagnosticos",
+    "covid-19",
+    "historia-medica"
+  ],
+  "status": "prepa",
+  "workflowStatus": "terminado",
+  "notes": "Extraído desde SPIP ID 102. Título y subtítulo mejorados para reflejar mejor el contenido. Artículo reorganizado con estructura clara.",
+  "spipArticleId": "102"
+}

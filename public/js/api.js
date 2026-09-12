@@ -24,6 +24,7 @@
 'use strict';
 
 import { showToast, apiFetch } from './utils.js';
+import { setActiveTab, showListView } from './list-view.js';
 
 async function postTransition(endpoint, {
   btn,
@@ -56,7 +57,8 @@ async function postTransition(endpoint, {
 
   showToast(outcome.message, outcome.toastType ?? 'error', outcome.toastDuration ?? 5000);
 
-  if (outcome.settle) await onSettled();
+  if (outcome.onSuccess) await outcome.onSuccess();
+  else if (outcome.settle) await onSettled();
   if (outcome.restore && btn) {
     btn.disabled = false;
     if (busyClass) btn.classList.remove(busyClass);
@@ -81,7 +83,25 @@ export async function publishArticle(id, btn, onSettled) {
             message: `✅ Publicado en SPIP (ID ${data.spipArticleId}) pero el write-back al JSON falló. Usar --recover-from-log.`,
           };
         }
-        return { success: true, settle: true, toastType: 'success', message: `✅ Publicado — ID SPIP: ${data.spipArticleId}` };
+        // Article was auto-archived on the server. Always return to the list
+        // view first — this matters when publish was triggered from the
+        // Detail view, which would otherwise stay on screen showing a now-
+        // stale article while the tab state silently changed underneath it
+        // — then switch to the Archive tab so the user can see where it
+        // went. setActiveTab('archivo') already triggers loadArchive()
+        // internally, so we just await the promise it returns instead of
+        // calling loadArchive() a second time.
+        return {
+          success: true,
+          settle: false, // skip generic loadArticles — we navigate away instead
+          toastType: 'success',
+          toastDuration: 7000,
+          message: `✅ Publicado en SPIP (ID #${data.spipArticleId}) — el artículo pasó al Archivo.`,
+          onSuccess: async () => {
+            showListView();
+            await setActiveTab('archivo');
+          },
+        };
       }
       if (res.status === 409) {
         return { success: false, settle: true, toastType: 'info', message: `⛔ ${data.error}` };

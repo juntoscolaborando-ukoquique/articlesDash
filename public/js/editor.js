@@ -17,7 +17,7 @@ import {
 import { state, WS } from './state.js';
 import { showToast, escHtml, htmlToPlainText, apiFetch } from './utils.js';
 import { sendToRevisionArticle } from './api.js';
-import { loadArticles, updateTabCounts, setActiveTab, showListView } from './list-view.js';
+import { loadArticles, updateTabCounts, setActiveTab, showListView, focusArticleInList } from './list-view.js';
 
 // ── View switching ────────────────────────────────────────────────────────
 
@@ -195,8 +195,8 @@ export async function handleEditorSend() {
   const id = state.editingArticleId;
   const ok = await sendToRevisionArticle(id, null, async () => {
     await loadArticles();
-    setActiveTab(WS.EN_PROGRESO);
     showListView();
+    focusArticleInList(id);
   });
 
   if (!ok) {

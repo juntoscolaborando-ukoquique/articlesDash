@@ -5,6 +5,46 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.16.0] — 2026-09-12
+
+### Dashboard — corrección de flujo post-publicación
+
+Dos bugs introducidos en 1.15.0 al activar el auto-archivo:
+
+- **Bug 1 — artículo desaparecía del dashboard tras publicar:** después de la publicación, el servidor archivaba el JSON y el frontend llamaba `loadArticles()`, que ya no encontraba el artículo y lo borraba silenciosamente de la vista. Corregido: el éxito de publicación ya no llama `loadArticles()`; en su lugar navega directamente al tab Archivo y llama `loadArchive()`.
+- **Bug 2 — tab Archivo aparecía vacío:** `loadArchive()` solo se llamaba cuando el usuario hacía click manual en el tab. Corregido por el mismo cambio anterior.
+- **Mensaje informativo:** el toast de éxito ahora dice `✅ Publicado en SPIP (ID #NNN) — el artículo pasó al Archivo.` (visible 7 s) para que el usuario sepa exactamente qué ocurrió y dónde encontrar el artículo.
+- **Scripts nuevos:** `src/scripts/search-spip-articles.mjs` (búsqueda de artículos en SPIP por nombre), `src/scripts/archive-published-articles.mjs` (archivo masivo de artículos ya publicados). Referenciados en `REMOTE-MANAGE.md` §11 y §13.
+
+**Archivos modificados:** `public/js/api.js` (`postTransition` + `publishArticle`), `REMOTE-MANAGE.md`
+
+---
+
+## [1.15.0] — 2026-09-12
+
+### Dashboard — artículos publicados se archivan automáticamente
+
+- **Auto-archivo al publicar**: cuando `POST /api/articles/:id/publish` responde con `status: 'published'`, el backend llama a `archiveArticle(id)` de forma inmediata. El artículo desaparece del dashboard activo y queda visible en la pestaña Archivo. El error de archivo es no-fatal (se loguea pero no revierte la respuesta).
+- **Migración inicial**: los 25 artículos ya publicados en SPIP que permanecían en el dashboard activo fueron movidos a `articles/archive/` en esta versión.
+- **Archivo modificado**: `src/server.mjs` (caso `'published'` del switch de publicación).
+
+---
+
+## [1.14.0] — 2026-09-12
+
+### Dashboard — navegación automática tras cambio de sección
+
+- **Nueva función `focusArticleInList(id)`** en `public/js/list-view.js`: después de cualquier transición de workflow, cambia automáticamente al tab de destino del artículo y resalta su fila con una animación de destello azul (1.8 s).
+- Todos los callbacks `onSettled` de transiciones ahora llaman a `focusArticleInList` en lugar de dejar al usuario en la vista sin referencia visual:
+  - Fila lista: Aprobar (→ Terminado), Desaprobar (→ En Progreso), Enviar a Edición, Enviar a Revisión
+  - Editor de campos (En Progreso): Aprobar, Enviar a Edición
+  - Editor de borrador (Edición): Enviar a Revisión — eliminado el `setActiveTab` manual redundante
+- CSS: `@keyframes rowFlash` + `.row-highlight` añadidos en `public/index.html`.
+
+**Archivos modificados:** `public/js/list-view.js`, `public/js/detail-view.js`, `public/js/editor.js`, `public/index.html`
+
+---
+
 ## [1.12.0] — 2026-09-12
 
 ### Artículos
@@ -1486,3 +1526,29 @@ publicación, validación y auditoría.
 - Solo se copió el código estrictamente necesario de `KILOMBO-BUILD`.
   No se trajeron: el servidor Express, el sistema de borradores, la migración
   masiva, ni los scripts de publicación al mirror JSON.
+## 1.13.0 - 2026-09-12
+
+### Subtitle Formatting Fixes
+
+**Fixed Issues:**
+- Identified and documented subtitle formatting problems in SPIP articles
+- Created troubleshooting documentation in `TROUBLESHOOTING.md`
+- Fixed empty subtitles in SPIP articles 100 and 102
+- Added missing subtitles to local articles `articulo-1788658811564.json` and `articulo-1789035223853.json`
+
+**New Scripts:**
+- `update-spip-subtitle.mjs` - Simple script to update subtitles in existing SPIP articles (works in view mode)
+- `update-article-fields.mjs` - Enhanced field update script (needs AJAX field handling improvements)
+- `batch-update-subtitles.mjs` - Batch processing for subtitle updates
+- `analyze-subtitle-issues.mjs` - Detects subtitle formatting problems
+- `check-subtitle-details.mjs` - Detailed subtitle analysis
+
+**Documentation:**
+- Added comprehensive troubleshooting guide for subtitle issues
+- Documented AJAX field loading challenges in SPIP forms
+- Created workaround strategies for field update problems
+
+**Technical Findings:**
+- Discovered that `exec=article` (view mode) provides more reliable field access than `exec=article_edit` (edit mode) for AJAX-loaded fields
+- Documented field selector patterns for different SPIP form modes
+- Identified need for improved AJAX field handling in update scripts

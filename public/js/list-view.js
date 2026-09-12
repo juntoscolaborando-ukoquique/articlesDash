@@ -38,6 +38,34 @@ export function showListView() {
 
 // ── Tab logic ─────────────────────────────────────────────────────────────
 
+/**
+ * Switch to the tab that contains `articleId` and briefly highlight its row
+ * so the user can see where the article landed after a workflow transition.
+ * Safe to call even if the article is not in the current data snapshot —
+ * it just switches the tab without highlighting.
+ *
+ * @param {string} articleId
+ */
+export function focusArticleInList(articleId) {
+  const article = state.articles.find((a) => a.id === articleId);
+  if (!article) return;
+
+  const targetTab = workflowStatusOf(article);
+  setActiveTab(targetTab);
+
+  // The row is already in the DOM after renderTable() — find it and flash it.
+  const row = tbody.querySelector(`tr[data-id="${CSS.escape(articleId)}"]`);
+  if (!row) return;
+
+  row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  row.classList.add('row-highlight');
+  setTimeout(() => row.classList.remove('row-highlight'), 1800);
+}
+
+// Returns the promise from loadArchive() when switching to the archive tab
+// (undefined otherwise) so callers that need to know when the tab's data has
+// finished loading — e.g. api.js after an auto-archiving publish — can await
+// it instead of calling loadArchive() a second time themselves.
 export function setActiveTab(tab) {
   state.activeTab = tab;
   tabBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
@@ -45,15 +73,15 @@ export function setActiveTab(tab) {
   if (tab === 'sitio') {
     viewList.style.display  = 'none';
     viewSite.style.display  = 'block';
-  } else if (tab === 'archivo') {
-    viewSite.style.display  = 'none';
-    viewList.style.display  = 'block';
-    loadArchive();
-  } else {
-    viewSite.style.display  = 'none';
-    viewList.style.display  = 'block';
-    renderTable(state.articles);
+    return undefined;
   }
+  viewSite.style.display  = 'none';
+  viewList.style.display  = 'block';
+  if (tab === 'archivo') {
+    return loadArchive();
+  }
+  renderTable(state.articles);
+  return undefined;
 }
 
 export function updateTabCounts(data) {
@@ -199,7 +227,7 @@ function buildActionCell(article, workflowStatus, isEdicion, isPublished) {
     return tdAction;
   }
 
-  if (!isPublished && article.valid) {
+  if (!isPublished && article.valid && workflowStatus === 'terminado') {
     const btn = document.createElement('button');
     btn.className = 'publish-btn';
     btn.textContent = 'Publicar en SPIP';
@@ -407,7 +435,7 @@ export function handlePublish(e) {
 export function handleDemote(e) {
   const btn = e.currentTarget;
   const id  = btn.dataset.articleId;
-  demoteArticle(id, btn, loadArticles);
+  demoteArticle(id, btn, async () => { await loadArticles(); focusArticleInList(id); });
 }
 
 // ── Duplicate title check ─────────────────────────────────────────────────
@@ -454,17 +482,17 @@ export function handlePromote(e) {
     }
   }
 
-  promoteArticle(id, btn, loadArticles);
+  promoteArticle(id, btn, async () => { await loadArticles(); focusArticleInList(id); });
 }
 
 export function handleSendToEdicion(e) {
   const btn = e.currentTarget;
   const id  = btn.dataset.articleId;
-  sendToEdicionArticle(id, btn, loadArticles);
+  sendToEdicionArticle(id, btn, async () => { await loadArticles(); focusArticleInList(id); });
 }
 
 export function handleSendToRevisionFromList(e) {
   const btn = e.currentTarget;
   const id  = btn.dataset.articleId;
-  sendToRevisionArticle(id, btn, loadArticles);
+  sendToRevisionArticle(id, btn, async () => { await loadArticles(); focusArticleInList(id); });
 }

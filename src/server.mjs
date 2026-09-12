@@ -335,6 +335,11 @@ app.post('/api/articles/:id/publish', asyncHandler('POST /api/articles/:id/publi
         return res.json({ success: true, dryRun: true, unimplementedFields: result.unimplementedFields });
 
       case 'published':
+        // Auto-archive: move the JSON to articles/archive/ now that it lives
+        // in SPIP. Errors are non-fatal — the publish itself already succeeded.
+        try { archiveArticle(id); } catch (archErr) {
+          console.warn(`[publish] Auto-archive failed for "${id}": ${archErr.message}`);
+        }
         return res.json({
           success:             true,
           spipArticleId:       result.spipArticleId,
