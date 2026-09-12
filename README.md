@@ -72,15 +72,33 @@ articulos-READY/
 │
 ├── public/
 │   ├── index.html             ← dashboard web (frontend)
-│   └── app.js                 ← lógica del dashboard (JS vanilla)
+│   └── js/                    ← lógica del dashboard (JS vanilla, sin bundler)
+│       ├── main.js            ← entry point: routing entre vistas, boot
+│       ├── state.js           ← estado compartido + constantes WS
+│       ├── dom.js             ← referencias centralizadas a elementos del DOM
+│       ├── utils.js           ← helpers: toasts, formato, texto↔HTML, apiFetch
+│       ├── api.js             ← fetch wrappers de las transiciones de workflow
+│       ├── list-view.js       ← tabla principal, tabs, archivo
+│       ├── detail-view.js     ← vista de detalle + editor de campos (En Progreso)
+│       ├── editor.js          ← editor de borrador (Edición) + historial local
+│       ├── site-admin.js      ← pestaña "Sitio": acciones directas sobre SPIP
+│       └── audit-report.js    ← panel de reconciliación audit log ↔ archivos
 │
 ├── test/
-│   └── article-validator.test.mjs  ← suite de tests (node --test)
+│   ├── article-validator.test.mjs  ← suite de tests (node --test)
+│   ├── field-splitter.test.mjs
+│   ├── text-to-html.test.mjs
+│   ├── publish-use-case.test.mjs
+│   ├── spip-admin.test.mjs
+│   ├── server.test.mjs
+│   └── check-dom-ids.sh             ← verifica ids usados en public/js/*.js contra index.html
 │
 ├── docs/
-│   ├── SCHEMA.md              ← especificación completa del formato JSON
-│   ├── ARTICLE-DESIGN.md      ← qué aspectos del diseño controla el pipeline
-│   └── REFACTOR.md            ← tareas de refactorización (estado actual)
+│   ├── SCHEMA.md               ← especificación completa del formato JSON
+│   ├── ARTICLE-DESIGN.md       ← qué aspectos del diseño controla el pipeline
+│   ├── IMPROVE_STEPS.md        ← splitter heurístico + editor de campos (histórico)
+│   ├── PUBLISHING.md           ← guía operativa de publicación
+│   └── RISKS.md                ← riesgos conocidos del pipeline
 │
 ├── .env                       ← credenciales (no versionado)
 ├── .env.example               ← plantilla de variables de entorno
@@ -125,6 +143,14 @@ npm run dashboard
 Abre `http://localhost:3000` en el browser. Muestra todos los artículos en
 `articles/` con título, sección, fecha, estado y ID SPIP. El botón
 "Publicar en SPIP" ejecuta el flujo completo desde el browser.
+
+Nota: hay un script conveniente que arranca el servidor y **abre** la URL
+en el navegador automáticamente:
+
+```bash
+npm run start:open
+```
+(Linux: usa `xdg-open`.)
 
 ### Publicar un artículo (CLI)
 
@@ -316,6 +342,7 @@ implementación de escritura en `spip-client.mjs`:
 - `topics` — mots-clés (palabras clave)
 - `author` — autor explícito (distinto del usuario autenticado)
 - `date` — fecha del artículo (se valida pero aún no hay selector confirmado)
+- `sourceDate` — fecha de publicación en la fuente original (no tiene campo equivalente en el formulario de creación)
 
 El artículo se crea igualmente; estos campos hay que añadirlos manualmente
 desde el panel de SPIP. Cuando se implemente cada uno en `spip-client.mjs`,

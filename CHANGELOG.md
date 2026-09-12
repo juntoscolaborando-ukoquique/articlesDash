@@ -5,6 +5,52 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.12.0] — 2026-09-12
+
+### Artículos
+
+- `articles/el-concepto-del-nuevo-orden-mundial.json` — artículo nuevo creado
+  como reemplazo del artículo SPIP #104, que tenía un documento HTML completo
+  (`<head>`, `<style>`, `<body>`) pegado en el campo `texte` en lugar del HTML
+  del cuerpo. Publicado como SPIP ID 128. Artículo #104 movido a papelera y
+  borrado permanentemente.
+
+### Scripts
+
+- `src/scripts/extract-spip-article.mjs` — script genérico nuevo (reemplaza el
+  one-off `extract-article-104.mjs`). Lee todos los campos de cualquier artículo
+  SPIP via `exec=article` y los imprime como JSON en stdout. Uso:
+
+  ```bash
+  node src/scripts/extract-spip-article.mjs <id>
+  ```
+
+  Campos extraídos: `titre`, `surtitre`, `soustitre`, `texte`, `descriptif`,
+  `chapo`, `ps`, `nom_site`, `url_site`, `sectionId`, `sectionLabel`,
+  `statusLabel`, `date` (ISO + display), `auteur`, `lang`, `topics`,
+  `allFields` (diagnóstico). Los mensajes de progreso van a stderr; el JSON
+  va a stdout, lo que permite redireccionarlo (`> archivo.json`) sin ruido.
+
+---
+
+## [1.11.0] — 2026-09-11
+
+### Revertido — Decomposición de vistas
+
+- Aplicado archivo `articulos-render-decomposition.tar.gz` con versiones
+  simplificadas de tres módulos frontend:
+  - `public/js/audit-report.js` — usa `fetch()` directo en vez de `apiFetch()`
+  - `public/js/detail-view.js` — usa `fetch()` directo y strings literales
+    para workflow status
+  - `public/js/list-view.js` — usa strings literales `'edicion'`,
+    `'en-progreso'`, `'terminado'` en vez de constantes `WS`
+
+  Este cambio revierte parcialmente la integración de `apiFetch()` y las
+  constantes `WS` en estos tres archivos, retornando a un estilo más simple
+  con `fetch()` nativo y strings literales.
+
+---
+
 ## [1.10.0] — 2026-09-11
 
 ### Añadido — Banner de servidor desconectado

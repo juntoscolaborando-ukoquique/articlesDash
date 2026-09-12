@@ -127,6 +127,33 @@ describe('splitContentIntoFields', () => {
     }
   });
 
+  test('does NOT treat ordinary words starting with a PS marker as a P.S. (regression)', () => {
+    // "Notario" starts with "nota", "Psicólogos" starts with "ps" — neither
+    // is a postscript marker. Without a word boundary these were wrongly
+    // popped off the body and into `ps`.
+    for (const closingParagraph of [
+      'Notario declaró que el proceso fue irregular y citó varias pruebas documentales.',
+      'Psicólogos alertan sobre el aumento de casos reportados este año.',
+    ]) {
+      const input = html('Primer párrafo.', 'Segundo párrafo.', closingParagraph);
+      const result = splitContentIntoFields(input);
+      assert.equal(result.ps, '', `"${closingParagraph}" should not be detected as PS`);
+      assert.ok(
+        result.contentHtml.includes(closingParagraph),
+        `"${closingParagraph}" should stay in contentHtml`
+      );
+    }
+  });
+
+  test('does not mistake a body sentence that merely mentions "fecha" for a source-date footer (regression)', () => {
+    const closingParagraph =
+      'La fecha límite para presentar el recurso vence el 20 de julio de 2026, según fuentes judiciales.';
+    const input = html('Primer párrafo.', 'Segundo párrafo.', closingParagraph);
+    const result = splitContentIntoFields(input);
+    assert.equal(result.guessed.sourceDate, undefined);
+    assert.ok(result.contentHtml.includes(closingParagraph));
+  });
+
   test('combines source footer + PS + chapo extraction together, in order', () => {
     const input = html(
       'Este es el chapo.',

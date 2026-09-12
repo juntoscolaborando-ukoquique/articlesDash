@@ -24,7 +24,10 @@ const PARAGRAPH_RE = /<p>([\s\S]*?)<\/p>/gi;
 
 const SOURCE_URL_RE = /(?:fuente(?:\s+original)?|source)\s*:\s*(?:(.+?)\s*[-–—:]\s*)?(https?:\/\/\S+)/i;
 const AUTHOR_RE = /^\s*(?:autor|por|author)\s*:\s*(.+)$/i;
-const PS_START_RE = /^\s*(?:p\.?\s*d\.?|ps|nota|\[nota|\*)/i;
+// \b after each bare-word alternative so this only matches the marker
+// itself ("PS:", "Nota:", "Nota importante") and not any ordinary word
+// that happens to start with the same letters ("Psicólogos", "Notario").
+const PS_START_RE = /^\s*(?:p\.?\s*d\.?\b|ps\b|nota\b|\[nota|\*)/i;
 
 // Fechas: DD/MM/YYYY, DD-MM-YYYY, o "20 de julio de 2026".
 const DATE_NUMERIC_RE = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/;
@@ -37,7 +40,20 @@ const DATE_TEXTUAL_RE = new RegExp(
   `\\b(\\d{1,2})\\s+de\\s+(${Object.keys(MONTHS).join('|')})\\s+de\\s+(\\d{4})\\b`,
   'i',
 );
-const DATE_CONTEXT_RE = /publicad|fecha/i;
+// Matches the whole metadata label, including the common "fecha de
+// publicación" phrasing and a trailing separator/preposition, so the gap
+// left to the date itself is always small (see DATE_CONTEXT_MAX_GAP below).
+const DATE_CONTEXT_RE = /\b(?:fecha(?:\s+de\s+publicaci[oó]n)?|publicad[oa]?s?)\b\s*(?:[:\-–—]|\bel\b|\bdel\b)?/i;
+
+// Max characters allowed between the end of the matched label and the
+// start of the date. Metadata footers put them right next to each other
+// ("Fecha: 20/07/2026", "Publicado el 20 de julio de 2026", "Fecha de
+// publicación: 20 de julio de 2026"). Ordinary prose that merely mentions
+// a date somewhere in a sentence containing "fecha" ("La fecha límite...
+// vence el 20 de julio de 2026") puts many words in between — that gap is
+// what distinguishes a metadata line from a sentence that happens to use
+// the same words.
+const DATE_CONTEXT_MAX_GAP = 4;
 
 function pad2(n) {
   return String(n).padStart(2, '0');
@@ -45,21 +61,27 @@ function pad2(n) {
 
 /**
  * Intenta extraer una fecha ISO (YYYY-MM-DD) de un párrafo de metadata,
- * solo si aparece cerca de una palabra de contexto ("publicado"/"fecha")
- * para no confundir cualquier fecha mencionada en el cuerpo con la fecha
- * de publicación.
+ * solo si una palabra de contexto ("publicado"/"fecha") aparece justo antes
+ * de la fecha (dentro de DATE_CONTEXT_MAX_GAP caracteres) — no en cualquier
+ * lugar del párrafo. Un footer de metadata las pone pegadas ("Fecha:
+ * 20/07/2026"); una oración de cuerpo que solo menciona "fecha" en otro
+ * punto de la frase ("La fecha límite... vence el 20 de julio de 2026")
+ * deja muchas palabras en el medio y no debe confundirse con la fecha de
+ * publicación.
  */
 function extractSourceDate(text) {
-  if (!DATE_CONTEXT_RE.test(text)) return null;
+  const contextMatch = text.match(DATE_CONTEXT_RE);
+  if (!contextMatch) return null;
+  const afterContext = text.slice(contextMatch.index + contextMatch[0].length);
 
-  const numeric = text.match(DATE_NUMERIC_RE);
-  if (numeric) {
+  const numeric = afterContext.match(DATE_NUMERIC_RE);
+  if (numeric && numeric.index <= DATE_CONTEXT_MAX_GAP) {
     const [, d, m, y] = numeric;
     return `${y}-${pad2(m)}-${pad2(d)}`;
   }
 
-  const textual = text.match(DATE_TEXTUAL_RE);
-  if (textual) {
+  const textual = afterContext.match(DATE_TEXTUAL_RE);
+  if (textual && textual.index <= DATE_CONTEXT_MAX_GAP) {
     const [, d, monthName, y] = textual;
     const month = MONTHS[monthName.toLowerCase()];
     if (month) return `${y}-${month}-${pad2(d)}`;

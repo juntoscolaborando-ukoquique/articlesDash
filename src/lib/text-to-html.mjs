@@ -101,9 +101,9 @@ export function textToParagraphHtml(text) {
  * @param {string} html
  * @returns {string}
  */
-// Nota: htmlToPlainText() en public/app.js es un duplicado intencional de esta función.
-// El frontend no tiene bundler para importar este módulo. Si se añade un paso de build,
-// colapsar ambas en una sola. Mantener sincronizadas hasta entonces.
+// Nota: htmlToPlainText() en public/js/utils.js es un duplicado intencional de esta
+// función. El frontend no tiene bundler para importar este módulo. Si se añade un paso
+// de build, colapsar ambas en una sola. Mantener sincronizadas hasta entonces.
 export function htmlParagraphsToText(html) {
   if (!html) return '';
 

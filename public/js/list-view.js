@@ -17,8 +17,8 @@ import {
   countEdicion, countTerminado, countEnProgreso, countArchivo,
   viewList, viewDetail, viewEditor, viewSite,
 } from './dom.js';
-import { state, WS } from './state.js';
-import { showToast, formatDate, sectionLabel, escHtml, workflowStatusOf, apiFetch } from './utils.js';
+import { state } from './state.js';
+import { showToast, formatDate, sectionLabel, escHtml, workflowStatusOf } from './utils.js';
 import {
   publishArticle, demoteArticle, promoteArticle,
   sendToEdicionArticle, sendToRevisionArticle,
@@ -41,7 +41,7 @@ export function showListView() {
 export function setActiveTab(tab) {
   state.activeTab = tab;
   tabBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
-  newArticleBtn.style.display = tab === WS.EDICION ? '' : 'none';
+  newArticleBtn.style.display = tab === 'edicion' ? '' : 'none';
   if (tab === 'sitio') {
     viewList.style.display  = 'none';
     viewSite.style.display  = 'block';
@@ -57,8 +57,8 @@ export function setActiveTab(tab) {
 }
 
 export function updateTabCounts(data) {
-  const edicion    = data.filter((a) => workflowStatusOf(a) === WS.EDICION).length;
-  const terminado  = data.filter((a) => workflowStatusOf(a) === WS.TERMINADO).length;
+  const edicion    = data.filter((a) => workflowStatusOf(a) === 'edicion').length;
+  const terminado  = data.filter((a) => workflowStatusOf(a) === 'terminado').length;
   const enProgreso = data.length - edicion - terminado;
   countEdicion.textContent    = edicion;
   countTerminado.textContent  = terminado;
@@ -68,79 +68,95 @@ export function updateTabCounts(data) {
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
+//
+// renderRow() is a straight composition of the six <td> builders below, one
+// per column. Each builder takes just the article plus whatever derived
+// flags it needs — none of them touch the DOM outside their own cell.
 
-export function renderRow(article) {
-  const tr = document.createElement('tr');
-  tr.dataset.id = article.id;
-
-  const isPublished = article.status === 'publicado';
-  const workflowStatus = workflowStatusOf(article);
-  const isEdicion = workflowStatus === WS.EDICION;
-
-  // Title cell
+function buildTitleCell(article, workflowStatus, isEdicion) {
   const tdTitle = document.createElement('td');
   tdTitle.className = 'col-title';
+
   const titleBtn = document.createElement('button');
   titleBtn.className = 'article-title-link';
   titleBtn.textContent = article.title || '(sin título)';
-  titleBtn.title = isEdicion ? 'Seguir editando' : (workflowStatus === WS.EN_PROGRESO ? 'Editar campos' : 'Ver detalle');
+  titleBtn.title = isEdicion ? 'Seguir editando' : (workflowStatus === 'en-progreso' ? 'Editar campos' : 'Ver detalle');
   titleBtn.addEventListener('click', () => {
     if (isEdicion) return openEditor(article.id);
-    if (workflowStatus === WS.EN_PROGRESO) return openFieldsEditor(article.id);
+    if (workflowStatus === 'en-progreso') return openFieldsEditor(article.id);
     return openDetail(article.id); // terminado — sigue de solo lectura
   });
   tdTitle.appendChild(titleBtn);
+
   const hint = document.createElement('div');
   hint.className = 'title-hint';
-  hint.textContent = isEdicion ? 'Seguir editando →' : (workflowStatus === WS.EN_PROGRESO ? 'Editar campos →' : 'Ver detalle →');
+  hint.textContent = isEdicion ? 'Seguir editando →' : (workflowStatus === 'en-progreso' ? 'Editar campos →' : 'Ver detalle →');
   tdTitle.appendChild(hint);
+
   if (article.descriptif) {
     const descDiv = document.createElement('div');
     descDiv.className = 'article-descriptif';
     descDiv.textContent = article.descriptif;
     tdTitle.appendChild(descDiv);
   }
-  // Show validation errors in En Progreso / Terminado — no tienen sentido en
-  // Edición, donde todavía falta completar casi todo el schema a propósito.
-  if (!isEdicion && !article.valid && article.validationErrors?.length) {
-    const errDiv = document.createElement('div');
-    errDiv.className = 'validation-errors';
-    for (const err of article.validationErrors.slice(0, 3)) {
-      const e = document.createElement('div');
-      e.className = 'validation-error';
-      e.textContent = `⚠ ${err}`;
-      errDiv.appendChild(e);
-    }
-    if (article.validationErrors.length > 3) {
-      const more = document.createElement('div');
-      more.className = 'validation-error';
-      more.textContent = `… y ${article.validationErrors.length - 3} error(es) más`;
-      errDiv.appendChild(more);
-    }
-    tdTitle.appendChild(errDiv);
-  }
 
-  // Section
+  const errDiv = buildValidationErrorsBlock(article, isEdicion);
+  if (errDiv) tdTitle.appendChild(errDiv);
+
+  return tdTitle;
+}
+
+// Show validation errors in En Progreso / Terminado — no tienen sentido en
+// Edición, donde todavía falta completar casi todo el schema a propósito.
+function buildValidationErrorsBlock(article, isEdicion) {
+  if (isEdicion || article.valid || !article.validationErrors?.length) return null;
+
+  const errDiv = document.createElement('div');
+  errDiv.className = 'validation-errors';
+  for (const err of article.validationErrors.slice(0, 3)) {
+    const e = document.createElement('div');
+    e.className = 'validation-error';
+    e.textContent = `⚠ ${err}`;
+    errDiv.appendChild(e);
+  }
+  if (article.validationErrors.length > 3) {
+    const more = document.createElement('div');
+    more.className = 'validation-error';
+    more.textContent = `… y ${article.validationErrors.length - 3} error(es) más`;
+    errDiv.appendChild(more);
+  }
+  return errDiv;
+}
+
+function buildSectionCell(article) {
   const tdSection = document.createElement('td');
   tdSection.className = 'col-section';
   tdSection.textContent = sectionLabel(article.section);
+  return tdSection;
+}
 
-  // Date
+function buildDateCell(article) {
   const tdDate = document.createElement('td');
   tdDate.className = 'col-date';
   tdDate.textContent = formatDate(article.date);
+  return tdDate;
+}
 
-  // Status badge — solo en Terminado (listo/publicado). En Edición y En Progreso
-  // la celda queda vacía: el estado no aporta información útil al editor allí.
+// Status badge — solo en Terminado (listo/publicado). En Edición y En Progreso
+// la celda queda vacía: el estado no aporta información útil al editor allí.
+function buildStatusCell(article, workflowStatus) {
   const tdStatus = document.createElement('td');
   tdStatus.className = 'col-status';
-  if (workflowStatusOf(article) === WS.TERMINADO) {
+  if (workflowStatus === 'terminado') {
     tdStatus.innerHTML = `<span class="badge badge-${article.status}">${article.status}</span>`;
   }
+  return tdStatus;
+}
 
-  // SPIP ID
+function buildSpipCell(article) {
   const tdSpip = document.createElement('td');
   tdSpip.className = 'col-spip';
+
   if (article.spipArticleId && article.publishedUrl) {
     tdSpip.innerHTML = `<span class="spip-id"><a href="${escHtml(article.publishedUrl)}" target="_blank" rel="noopener">#${escHtml(String(article.spipArticleId))}</a></span>`;
   } else if (article.spipArticleId) {
@@ -165,7 +181,10 @@ export function renderRow(article) {
     tdSpip.innerHTML = `<span class="spip-id" style="color:var(--border)">—</span>`;
   }
 
-  // Action buttons
+  return tdSpip;
+}
+
+function buildActionCell(article, workflowStatus, isEdicion, isPublished) {
   const tdAction = document.createElement('td');
   tdAction.className = 'col-action';
 
@@ -177,45 +196,64 @@ export function renderRow(article) {
     sendBtn.dataset.articleId = article.id;
     sendBtn.addEventListener('click', handleSendToRevisionFromList);
     tdAction.appendChild(sendBtn);
-  } else {
-    if (!isPublished && article.valid) {
-      const btn = document.createElement('button');
-      btn.className = 'publish-btn';
-      btn.textContent = 'Publicar en SPIP';
-      btn.dataset.articleId = article.id;
-      btn.addEventListener('click', handlePublish);
-      tdAction.appendChild(btn);
-    }
-    // Desaprobar — solo en Terminado. Manda el artículo a En Progreso.
-    if (workflowStatus === WS.TERMINADO) {
-      const demoteBtn = document.createElement('button');
-      demoteBtn.className = 'demote-btn';
-      demoteBtn.textContent = 'Desaprobar';
-      demoteBtn.dataset.articleId = article.id;
-      demoteBtn.addEventListener('click', handleDemote);
-      tdAction.appendChild(demoteBtn);
-    }
-    // Aprobar — solo en En Progreso. Manda el artículo a Terminado (gateado por validación).
-    if (workflowStatus === WS.EN_PROGRESO) {
-      const promoteBtn = document.createElement('button');
-      promoteBtn.className = 'promote-btn';
-      promoteBtn.textContent = 'Aprobar';
-      promoteBtn.dataset.articleId = article.id;
-      promoteBtn.addEventListener('click', handlePromote);
-      tdAction.appendChild(promoteBtn);
-
-      // Enviar a Edición — solo en En Progreso. Manda el artículo de vuelta
-      // a reescritura manual en la pantalla de Edición.
-      const edicionBtn = document.createElement('button');
-      edicionBtn.className = 'edicion-btn';
-      edicionBtn.textContent = 'Enviar a Edición';
-      edicionBtn.dataset.articleId = article.id;
-      edicionBtn.addEventListener('click', handleSendToEdicion);
-      tdAction.appendChild(edicionBtn);
-    }
+    return tdAction;
   }
 
-  tr.append(tdTitle, tdSection, tdDate, tdStatus, tdSpip, tdAction);
+  if (!isPublished && article.valid) {
+    const btn = document.createElement('button');
+    btn.className = 'publish-btn';
+    btn.textContent = 'Publicar en SPIP';
+    btn.dataset.articleId = article.id;
+    btn.addEventListener('click', handlePublish);
+    tdAction.appendChild(btn);
+  }
+  // Desaprobar — solo en Terminado. Manda el artículo a En Progreso.
+  if (workflowStatus === 'terminado') {
+    const demoteBtn = document.createElement('button');
+    demoteBtn.className = 'demote-btn';
+    demoteBtn.textContent = 'Desaprobar';
+    demoteBtn.dataset.articleId = article.id;
+    demoteBtn.addEventListener('click', handleDemote);
+    tdAction.appendChild(demoteBtn);
+  }
+  // Aprobar — solo en En Progreso. Manda el artículo a Terminado (gateado por validación).
+  if (workflowStatus === 'en-progreso') {
+    const promoteBtn = document.createElement('button');
+    promoteBtn.className = 'promote-btn';
+    promoteBtn.textContent = 'Aprobar';
+    promoteBtn.dataset.articleId = article.id;
+    promoteBtn.addEventListener('click', handlePromote);
+    tdAction.appendChild(promoteBtn);
+
+    // Enviar a Edición — solo en En Progreso. Manda el artículo de vuelta
+    // a reescritura manual en la pantalla de Edición.
+    const edicionBtn = document.createElement('button');
+    edicionBtn.className = 'edicion-btn';
+    edicionBtn.textContent = 'Enviar a Edición';
+    edicionBtn.dataset.articleId = article.id;
+    edicionBtn.addEventListener('click', handleSendToEdicion);
+    tdAction.appendChild(edicionBtn);
+  }
+
+  return tdAction;
+}
+
+export function renderRow(article) {
+  const tr = document.createElement('tr');
+  tr.dataset.id = article.id;
+
+  const isPublished = article.status === 'publicado';
+  const workflowStatus = workflowStatusOf(article);
+  const isEdicion = workflowStatus === 'edicion';
+
+  tr.append(
+    buildTitleCell(article, workflowStatus, isEdicion),
+    buildSectionCell(article),
+    buildDateCell(article),
+    buildStatusCell(article, workflowStatus),
+    buildSpipCell(article),
+    buildActionCell(article, workflowStatus, isEdicion, isPublished),
+  );
   return tr;
 }
 
@@ -228,20 +266,20 @@ export function renderTable(data) {
 
   if (!filtered.length) {
     const emptyMessages = {
-      [WS.EDICION]:     'No hay borradores en Edición.',
-      [WS.EN_PROGRESO]: 'No hay artículos en progreso.',
-      [WS.TERMINADO]:   'No hay artículos listos para publicar.',
+      edicion:      'No hay borradores en Edición.',
+      'en-progreso': 'No hay artículos en progreso.',
+      terminado:    'No hay artículos listos para publicar.',
     };
     tbody.innerHTML = `<tr class="state-row"><td colspan="6">${emptyMessages[state.activeTab] ?? 'No hay artículos.'}</td></tr>`;
     countEl.textContent = 'Artículos';
     return;
   }
 
-  if (state.activeTab === WS.TERMINADO) {
+  if (state.activeTab === 'terminado') {
     const listos     = filtered.filter((a) => a.status === 'listo').length;
     const publicados = filtered.filter((a) => a.status === 'publicado').length;
     countEl.textContent = `Terminado — ${listos} listo${listos !== 1 ? 's' : ''}, ${publicados} publicado${publicados !== 1 ? 's' : ''}`;
-  } else if (state.activeTab === WS.EN_PROGRESO) {
+  } else if (state.activeTab === 'en-progreso') {
     countEl.textContent = `En Progreso — ${filtered.length} artículo${filtered.length !== 1 ? 's' : ''} para validar`;
   } else {
     countEl.textContent = `Edición — ${filtered.length} borrador${filtered.length !== 1 ? 'es' : ''}`;
@@ -257,7 +295,7 @@ export function renderTable(data) {
 export async function loadArticles() {
   tbody.innerHTML = '<tr class="state-row"><td colspan="6">Cargando…</td></tr>';
   try {
-    const res = await apiFetch('/api/articles');
+    const res = await fetch('/api/articles');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     state.articles = data.articles ?? [];
@@ -276,7 +314,7 @@ export async function loadArchive() {
   tbody.innerHTML = '<tr class="state-row"><td colspan="6">Cargando archivo…</td></tr>';
   countEl.textContent = 'Archivo';
   try {
-    const res = await apiFetch('/api/articles/archive');
+    const res = await fetch('/api/articles/archive');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const archived = data.articles ?? [];
@@ -409,7 +447,7 @@ export function handlePromote(e) {
         `⚠️ Posible título duplicado\n\n` +
         `"${article.title}"\n\n` +
         `es similar a:\n` +
-        `"${dup.title}" (${dup.workflowStatus ?? WS.TERMINADO})\n\n` +
+        `"${dup.title}" (${dup.workflowStatus ?? 'terminado'})\n\n` +
         `¿Querés aprobar igualmente?`
       );
       if (!confirmed) return;

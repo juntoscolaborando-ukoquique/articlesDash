@@ -1,6 +1,6 @@
 # Roadmap — Kilombo Editorial Pipeline
 
-**Actualizado:** 2026-09-05
+**Actualizado:** 2026-09-12
 
 ---
 
@@ -241,6 +241,20 @@ ahora. Ya existen:
   canonical con metadata (fecha, tamaño, palabras), botón para borrar duplicados
   seleccionados. Incluye shared utility `src/lib/text-utils.mjs` con normalización
   de títulos para evitar divergencia backend/frontend.
+
+  **Scripts de diagnóstico ya disponibles** (ver también [REMOTE-MANAGE.md §11](REMOTE-MANAGE.md)):
+
+  - `node src/scripts/find-duplicate-spip-articles.mjs` — escanea el audit
+    log y las páginas de administración SPIP buscando artículos publicados
+    más de una vez (mismo slug local → múltiples IDs SPIP). Genera un
+    informe en `tmp/spip-duplicates-report.json`. Útil antes de cualquier
+    limpieza manual.
+
+  - `node src/scripts/extract-spip-article.mjs <id>` — vuelca todos los
+    campos de un artículo SPIP (titre, texte, chapo, ps, sectionId, etc.)
+    como JSON en stdout. Útil para inspeccionar el contenido real de un ID
+    antes de decidir cuál conservar como canónico, o para recrear un
+    artículo con contenido corrupto (ver CHANGELOG 1.12.0).
 
 - Editor real de campos (surtitre, soustitre, chapo, ps, topics, coverImage) —
   hoy Edición solo cubre título + cuerpo en texto plano.

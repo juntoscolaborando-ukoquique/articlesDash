@@ -19,7 +19,7 @@ The CLI scripts are already correctly isolated:
 
 **Add a note to `find-duplicates.mjs` script (if we create one):**
 
-The script we used to find duplicates in "Tus artículos en curso" was ad-hoc and not persisted in the repo. If we add a permanent `duplicate-finder.mjs`:
+The script we used to find duplicates in "Tus artículos en curso" was ad-hoc and not persisted in the repo. A permanent implementation now exists as `src/scripts/find-duplicate-spip-articles.mjs`, with the appropriate warning in its header:
 
 ```javascript
 #!/usr/bin/env node
@@ -766,7 +766,8 @@ This exists because SPIP only exposes a delete button in the trash UI, not in th
 ### High priority (do now)
 
 - [x] Create `REMOTE-MANAGE.md` (documentation of remote operations)
-- [ ] Add note to future `duplicate-finder.mjs` clarifying it's remote-only
+- [x] Add note to `duplicate-finder.mjs` clarifying it's remote-only — done in `src/scripts/find-duplicate-spip-articles.mjs`
+- [x] Create `src/scripts/extract-spip-article.mjs` — inspect content of any SPIP article by ID (see CHANGELOG 1.12.0, REMOTE-MANAGE.md §11)
 
 ### Medium priority (next sprint)
 
@@ -784,7 +785,7 @@ This exists because SPIP only exposes a delete button in the trash UI, not in th
 ### Not recommended
 
 - ✗ Remove papelera requirement (it's a safety feature)
-- ✗ Create a separate `duplicate-finder.mjs` script (belong in dashboard Sitio)
+- ~~✗ Create a separate `duplicate-finder.mjs` script (belong in dashboard Sitio)~~ — **Implemented** as `src/scripts/find-duplicate-spip-articles.mjs` (SPIP-side scan) and `src/scripts/extract-spip-article.mjs` (content inspection of individual articles). These cover the remote/diagnostic side; the local dashboard duplicate detection (Issue 2) is still pending.
 
 ---
 

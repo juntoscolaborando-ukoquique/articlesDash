@@ -8,8 +8,7 @@
 'use strict';
 
 import { viewList, viewEditor, viewDetail, detailContent } from './dom.js';
-import { escHtml, formatDate, sectionLabel, renderError, showToast, htmlToPlainText, textToParagraphHtml, apiFetch } from './utils.js';
-import { WS } from './state.js';
+import { escHtml, formatDate, sectionLabel, renderError, showToast, htmlToPlainText, textToParagraphHtml } from './utils.js';
 import { publishArticle, demoteArticle, promoteArticle, sendToEdicionArticle } from './api.js';
 import { loadArticles, showListView } from './list-view.js';
 
@@ -27,7 +26,7 @@ export function showDetailViewLoading() {
 export async function openDetail(id) {
   showDetailViewLoading();
   try {
-    const res = await apiFetch(`/api/articles/${encodeURIComponent(id)}`);
+    const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { article } = await res.json();
     renderDetail(article);
@@ -37,24 +36,26 @@ export async function openDetail(id) {
   }
 }
 
-export function renderDetail(article) {
-  const isPublished = Boolean(article.spipArticleId);
-  const status = isPublished ? 'publicado' : 'listo';
-  // GET /api/articles/:id devuelve el JSON crudo (loadArticle), no el objeto
-  // mapeado de listArticles() — mismo default de ausencia que allá.
-  const isTerminadoDetail = (article.workflowStatus ?? WS.TERMINADO) === WS.TERMINADO;
+// renderDetail() itself just computes the flags, sets the markup, and wires
+// the buttons that markup produced. The markup building and the button
+// wiring each live in their own function below so neither has to be read
+// alongside the other to understand either one.
 
-  const topicsHtml = Array.isArray(article.topics) && article.topics.length
+function topicsHtmlFor(article) {
+  return Array.isArray(article.topics) && article.topics.length
     ? `<div class="topics-list">${article.topics.map((t) => `<span class="topic-chip">${escHtml(t)}</span>`).join('')}</div>`
     : '<span style="color:var(--muted)">—</span>';
+}
 
-  const spipHtml = article.spipArticleId
-    ? (article.publishedUrl
-        ? `<span class="spip-id"><a href="${escHtml(article.publishedUrl)}" target="_blank" rel="noopener">#${escHtml(String(article.spipArticleId))}</a></span>`
-        : `<span class="spip-id">#${escHtml(String(article.spipArticleId))}</span>`)
-    : '<span style="color:var(--muted)">—</span>';
+function spipHtmlFor(article) {
+  if (!article.spipArticleId) return '<span style="color:var(--muted)">—</span>';
+  return article.publishedUrl
+    ? `<span class="spip-id"><a href="${escHtml(article.publishedUrl)}" target="_blank" rel="noopener">#${escHtml(String(article.spipArticleId))}</a></span>`
+    : `<span class="spip-id">#${escHtml(String(article.spipArticleId))}</span>`;
+}
 
-  detailContent.innerHTML = `
+function buildDetailHtml(article, { isPublished, status, isTerminadoDetail }) {
+  return `
     <div class="detail-card">
       <div class="detail-header">
         <div>
@@ -70,7 +71,7 @@ export function renderDetail(article) {
         <span><strong>Fecha:</strong> ${escHtml(formatDate(article.date))}</span>
         ${article.author ? `<span><strong>Autor:</strong> ${escHtml(article.author)}</span>` : ''}
         ${article.sourceSite ? `<span><strong>Fuente:</strong> ${escHtml(article.sourceSite)}</span>` : ''}
-        <span><strong>ID SPIP:</strong> ${spipHtml}</span>
+        <span><strong>ID SPIP:</strong> ${spipHtmlFor(article)}</span>
       </div>
 
       ${article.descriptif ? `
@@ -104,12 +105,12 @@ export function renderDetail(article) {
       ` : ''}
 
       <div class="detail-section-label">Topics</div>
-      ${topicsHtml}
+      ${topicsHtmlFor(article)}
 
       <div class="detail-footer">
         <span style="color:var(--muted); font-size:0.82rem">id: ${escHtml(article.id)}</span>
         <span>
-          ${article.workflowStatus === WS.EN_PROGRESO
+          ${article.workflowStatus === 'en-progreso'
             ? `<button class="copy-btn" id="detail-copy-btn" data-article-id="${escHtml(article.id)}">📋 Copiar contenido</button>`
             : ''
           }
@@ -126,17 +127,20 @@ export function renderDetail(article) {
       </div>
     </div>
   `;
+}
 
-  if (!isPublished) {
-    const detailBtn = document.getElementById('detail-publish-btn');
-    detailBtn.addEventListener('click', () => {
-      publishArticle(article.id, detailBtn, async () => {
-        await loadArticles();   // actualiza la lista en background
-        await openDetail(article.id);
-      });
+function wirePublishButton(article, isPublished) {
+  if (isPublished) return;
+  const detailBtn = document.getElementById('detail-publish-btn');
+  detailBtn.addEventListener('click', () => {
+    publishArticle(article.id, detailBtn, async () => {
+      await loadArticles();   // actualiza la lista en background
+      await openDetail(article.id);
     });
-  }
+  });
+}
 
+function wireApprovalButtons(article, isTerminadoDetail) {
   if (isTerminadoDetail) {
     const demoteBtn = document.getElementById('detail-demote-btn');
     demoteBtn.addEventListener('click', () => {
@@ -147,45 +151,62 @@ export function renderDetail(article) {
         await openFieldsEditor(article.id);
       });
     });
-  } else {
-    const promoteBtn = document.getElementById('detail-promote-btn');
-    promoteBtn.addEventListener('click', () => {
-      promoteArticle(article.id, promoteBtn, async () => {
-        await openDetail(article.id);
-      });
-    });
-
-    const edicionBtn = document.getElementById('detail-edicion-btn');
-    edicionBtn.addEventListener('click', () => {
-      sendToEdicionArticle(article.id, edicionBtn, async () => {
-        await loadArticles();
-        showListView();
-      });
-    });
+    return;
   }
 
-  // Copy button — only present for en-progreso articles
-  if (article.workflowStatus === WS.EN_PROGRESO) {
-    document.getElementById('detail-copy-btn').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      const parts = [];
-      if (article.surtitre)    parts.push(article.surtitre);
-      if (article.title)       parts.push(article.title);
-      if (article.soustitre)   parts.push(article.soustitre);
-      if (article.descriptif)  parts.push('\n' + article.descriptif);
-      if (article.chapo)       parts.push('\n' + htmlToPlainText(article.chapo));
-      if (article.contentHtml) parts.push('\n' + htmlToPlainText(article.contentHtml));
-      if (article.ps)          parts.push('\n' + htmlToPlainText(article.ps));
-
-      try {
-        await navigator.clipboard.writeText(parts.join('\n'));
-        btn.textContent = '✅ Copiado';
-        setTimeout(() => { btn.textContent = '📋 Copiar contenido'; }, 2000);
-      } catch {
-        showToast('❌ No se pudo copiar al portapapeles', 'error');
-      }
+  const promoteBtn = document.getElementById('detail-promote-btn');
+  promoteBtn.addEventListener('click', () => {
+    promoteArticle(article.id, promoteBtn, async () => {
+      await openDetail(article.id);
     });
-  }
+  });
+
+  const edicionBtn = document.getElementById('detail-edicion-btn');
+  edicionBtn.addEventListener('click', () => {
+    sendToEdicionArticle(article.id, edicionBtn, async () => {
+      await loadArticles();
+      showListView();
+    });
+  });
+}
+
+// Copy button — only present for en-progreso articles
+function wireCopyButton(article) {
+  if (article.workflowStatus !== 'en-progreso') return;
+
+  document.getElementById('detail-copy-btn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const parts = [];
+    if (article.surtitre)    parts.push(article.surtitre);
+    if (article.title)       parts.push(article.title);
+    if (article.soustitre)   parts.push(article.soustitre);
+    if (article.descriptif)  parts.push('\n' + article.descriptif);
+    if (article.chapo)       parts.push('\n' + htmlToPlainText(article.chapo));
+    if (article.contentHtml) parts.push('\n' + htmlToPlainText(article.contentHtml));
+    if (article.ps)          parts.push('\n' + htmlToPlainText(article.ps));
+
+    try {
+      await navigator.clipboard.writeText(parts.join('\n'));
+      btn.textContent = '✅ Copiado';
+      setTimeout(() => { btn.textContent = '📋 Copiar contenido'; }, 2000);
+    } catch {
+      showToast('❌ No se pudo copiar al portapapeles', 'error');
+    }
+  });
+}
+
+export function renderDetail(article) {
+  const isPublished = Boolean(article.spipArticleId);
+  const status = isPublished ? 'publicado' : 'listo';
+  // GET /api/articles/:id devuelve el JSON crudo (loadArticle), no el objeto
+  // mapeado de listArticles() — mismo default de ausencia que allá.
+  const isTerminadoDetail = (article.workflowStatus ?? 'terminado') === 'terminado';
+
+  detailContent.innerHTML = buildDetailHtml(article, { isPublished, status, isTerminadoDetail });
+
+  wirePublishButton(article, isPublished);
+  wireApprovalButtons(article, isTerminadoDetail);
+  wireCopyButton(article);
 }
 
 // ── Fields editor view (En Progreso) ─────────────────────────────────────
@@ -199,7 +220,7 @@ export function renderDetail(article) {
 export async function openFieldsEditor(id) {
   showDetailViewLoading();
   try {
-    const res = await apiFetch(`/api/articles/${encodeURIComponent(id)}`);
+    const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { article } = await res.json();
     renderFieldsEditor(article);
@@ -279,7 +300,7 @@ export function renderFieldsEditor(article) {
       sourceDate:  document.getElementById('fields-source-date').value,
     };
     try {
-      const res = await apiFetch(`/api/articles/${encodeURIComponent(article.id)}/fields`, {
+      const res = await fetch(`/api/articles/${encodeURIComponent(article.id)}/fields`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
@@ -345,7 +366,7 @@ let DETAIL_ALLOWED_TAGS = new Set([
 
 export async function loadAllowedTagsFromSchema() {
   try {
-    const res = await apiFetch('/api/schema/allowed-tags');
+    const res = await fetch('/api/schema/allowed-tags');
     if (!res.ok) return;
     const data = await res.json();
     if (Array.isArray(data.allowedTags) && data.allowedTags.length) {

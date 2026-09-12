@@ -38,6 +38,23 @@ npm run delete-article -- --id <spip_id>
 
 O desde el dashboard: **Sitio** → "Borrado permanente" → confirma (IRREVERSIBLE)
 
+Nota técnica: el script invocado es `src/permanently-delete-article.mjs`. So puedes
+ejecutarlo directamente si lo prefieres. Opciones útiles:
+
+- `--dry-run` — simula la operación sin borrar nada.
+- El script pedirá confirmación interactiva (`s` para sí) antes de proceder;
+   si el artículo no está en `poubelle` lo moverá antes de intentar el borrado.
+
+Ejemplos:
+
+```bash
+# dry-run (no borra)
+node src/permanently-delete-article.mjs --id 103 --dry-run
+
+# borrado real (confirma interactiva requerida)
+node src/permanently-delete-article.mjs --id 103
+```
+
 ### Verificación
 
 Una vez borrado, el artículo desaparece completamente de SPIP. El audit log registra ambas operaciones:
@@ -116,6 +133,22 @@ Resultado esperado:
 ```
 ✅ Sin duplicados activos verificado en SPIP
 ```
+
+### Herramienta CLI: escaneo automático
+
+Nota: hay un script de utilidad que automatiza el escaneo y la comparación
+entre el `live-write-audit.log.jsonl`, las páginas de administración SPIP y los
+archivos JSON locales. Genera un informe JSON en `tmp/spip-duplicates-report.json`.
+
+Ejecutarlo desde el repo:
+
+```bash
+node src/scripts/find-duplicate-spip-articles.mjs
+```
+
+Salida esperada: resumen con pares duplicados detectados (si los hay) y
+coincidencias entre SPIP IDs y archivos locales.
+
 
 ### Caso especial: Duplicado ya borrado externamente
 
@@ -367,12 +400,60 @@ Es normal. Estamos usando Playwright (un navegador real) para:
 
 ---
 
-## 11. Resumen de comandos
+## 11. Inspección de contenido remoto
+
+### Leer todos los campos de un artículo SPIP
+
+```bash
+node src/scripts/extract-spip-article.mjs <id>
+```
+
+Abre una sesión Playwright, navega a `exec=article&id_article=<id>` y vuelca
+como JSON en stdout todos los campos visibles:
+
+| Campo | Descripción |
+|-------|-------------|
+| `titre` | Título |
+| `surtitre` / `soustitre` | Antetítulo / Subtítulo |
+| `texte` | Cuerpo del artículo (HTML renderizado) |
+| `descriptif` | Descripción / resumen |
+| `chapo` | Epígrafe / entradilla |
+| `ps` | Post-scriptum |
+| `nom_site` / `url_site` | Fuente (nombre y URL) |
+| `sectionId` / `sectionLabel` | Rubrique numérico y etiqueta |
+| `statusLabel` | Estado actual en SPIP |
+| `date.iso` / `date.display` | Fecha de creación (ISO y texto) |
+| `auteur` | Autor asignado |
+| `lang` | Idioma (`ES`, `FR`, `EN`) |
+| `topics` | Mots-clés asociados |
+| `allFields` | Campos de formulario visibles (diagnóstico) |
+
+Los mensajes de progreso (login, navegación) van a **stderr**; el JSON va
+a **stdout** — se puede redirigir sin ruido:
+
+```bash
+# Ver en terminal
+node src/scripts/extract-spip-article.mjs 128
+
+# Guardar en archivo
+node src/scripts/extract-spip-article.mjs 128 > tmp/articulo-128.json
+```
+
+**Cuándo usarlo:** antes de recrear un artículo con problemas de contenido,
+para diagnosticar qué se publicó realmente en SPIP, o para comparar el
+estado remoto con el JSON local.
+
+**Velocidad:** lento (requiere Playwright + login), ~15-30 segundos.
+
+---
+
+## 12. Resumen de comandos
 
 ```bash
 # Lectura
 npm run audit -- --report                      # Scan local de duplicados
 npm run status -- --inspect --id <id>          # Ver estado actual de un artículo
+node src/scripts/extract-spip-article.mjs <id> # Volcar todos los campos del artículo
 
 # Cambio de estado
 npm run status -- --change --id <id> --status poubelle   # Mover a papelera
@@ -391,7 +472,7 @@ npm run dashboard    # Inicia en http://localhost:3000
 
 ---
 
-## 12. Contacto y reportes
+## 13. Contacto y reportes
 
 Si encuentras inconsistencias entre el audit log y SPIP real:
 1. Ejecuta `npm run audit -- --report` (snapshot local)

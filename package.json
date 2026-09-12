@@ -6,12 +6,14 @@
   "scripts": {
     "start": "node src/server.mjs",
     "dashboard": "node src/server.mjs",
+    "start:open": "sh -c \"node src/server.mjs & sleep 0.5; xdg-open http://localhost:3000\"",
     "publish": "node src/publish-article.mjs",
     "validate": "node src/publish-article.mjs --validate-only",
     "validate:example": "node src/publish-article.mjs articles/example-article.json --validate-only",
     "probe": "node src/probe-rubriques.mjs",
     "status": "node src/manage-article-status.mjs",
     "delete-article": "node src/permanently-delete-article.mjs",
+    "find-duplicates": "node src/scripts/find-duplicate-spip-articles.mjs",
     "test": "node --test && bash test/check-dom-ids.sh"
   },
   "dependencies": {

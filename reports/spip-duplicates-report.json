@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-09-12T00:33:39.230Z",
+  "duplicates": [],
+  "localMatches": [
+    { "spipId": "110", "localFile": "fauci-fusible-controlado.json", "sim": 0.9786096256684492 },
+    { "spipId": "112", "localFile": "100000-medicos-contra-las-vacunas-covid-19.json", "sim": 0.92 },
+    { "spipId": "113", "localFile": "dr-david-martin-parlamento-europeo-oms.json", "sim": 0.9166666666666666 },
+    { "spipId": "114", "localFile": "dra-chinda-brandolino-dr-martin-monteverde-analisis-viales.json", "sim": 0.9113924050632911 },
+    { "spipId": "115", "localFile": "testimonios-alta-finanza-luciferina-ronald-bernard.json", "sim": 0.9890909090909091 },
+    { "spipId": "116", "localFile": "dr-mariano-arriaga-detencion-rosario-documental.json", "sim": 0.92 },
+    { "spipId": "117", "localFile": "dr-mike-yeadon-ex-vicepresidente-pfizer-declaraciones.json", "sim": 0.922077922077922 },
+    { "spipId": "124", "localFile": "temoignage-haute-finance-luciferienne-ronald-bernard.json", "sim": 0.9717868338557993 },
+    { "spipId": "126", "localFile": "articulo-1788940900561.json", "sim": 0.9736263736263736 },
+    { "spipId": "127", "localFile": "per-la-realidad-es-muy-diferente.json", "sim": 0.9926739926739927 }
+  ],
+  "recordsCount": 10,
+  "localCount": 16
+}
