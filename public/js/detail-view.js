@@ -308,6 +308,14 @@ export function renderFieldsEditor(article) {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
       saveStatus.textContent = '✅ Guardado';
+      if (data.nowInvalid) {
+        showToast(
+          `⚠️ Guardado, pero el artículo ya no pasa la validación y será movido a En Progreso:\n` +
+          data.validationErrors.join(' / '),
+          'error',
+          10000,
+        );
+      }
       await loadArticles(); // refresca validationErrors en la lista en background
       return true;
     } catch (err) {

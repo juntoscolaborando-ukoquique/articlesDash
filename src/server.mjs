@@ -273,7 +273,8 @@ const FIELDS_EDITABLE_KEYS = [
 
 app.put('/api/articles/:id/fields', asyncHandler('PUT /api/articles/:id/fields', async (req, res) => {
   const { id } = req.params;
-  if (!loadArticleOr404(id, res)) return;
+  const article = loadArticleOr404(id, res);
+  if (!article) return;
 
   const body = req.body ?? {};
   const patch = {};
@@ -281,7 +282,16 @@ app.put('/api/articles/:id/fields', asyncHandler('PUT /api/articles/:id/fields',
     if (body[key] !== undefined) patch[key] = body[key];
   }
   writeBack(id, patch);
-  res.json({ success: true });
+
+  // If the article is in Terminado, run validation after the save so the
+  // frontend can warn the user immediately — before the self-heal in
+  // listArticles() silently demotes it on the next read.
+  const updatedArticle = loadArticle(id);
+  const validationErrors = updatedArticle ? validateArticle(updatedArticle) : [];
+  const wasTerminado = article.workflowStatus === 'terminado';
+  const nowInvalid = wasTerminado && validationErrors.length > 0;
+
+  res.json({ success: true, validationErrors, nowInvalid });
 }));
 
 // ── API: publicar artículo ────────────────────────────────────────────────────
