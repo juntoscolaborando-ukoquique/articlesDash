@@ -5,6 +5,45 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.20.0] — 2026-09-13
+
+### Etapa 3 — detección y borrado de duplicados locales
+
+Implementa el diseño de `IMPLEMENTATION-ANALYSIS.md` §2 (Etapa 3 del ROADMAP).
+
+- **`src/lib/text-utils.mjs` (nuevo):** `normalizeTitle()` — minúsculas, sin
+  acentos, sin puntuación, espacios colapsados. Pura, sin acceso a fs.
+- **`findDuplicateGroups()` en `articles-store.mjs`:** agrupa artículos
+  activos (nunca `archive/`) por título normalizado. Cada grupo trae
+  `modifiedAtMs` (mtime del archivo), `fileSize` y `wordCount` por copia,
+  ordenado del más reciente al más viejo — la UI sugiere conservar el
+  primero. Grupos ordenados por cantidad de copias.
+- **`deleteArticleFile()` en `articles-store.mjs`:** borra el archivo local
+  de un artículo. Sin gate propio — las reglas de negocio viven en
+  `server.mjs`, mismo patrón que `promoteToTerminado()`/`validateArticle`.
+- **`GET /api/articles/duplicates`** (nuevo, declarado antes de
+  `GET /api/articles/:id`, mismo motivo que `/api/articles/archive`).
+  `'duplicates'` añadido a `RESERVED_SLUGS`.
+- **`DELETE /api/articles/:id`** (nuevo): borra un borrador local. Rechaza
+  con 409 si el artículo ya tiene `spipArticleId` o si no está en
+  `edicion`/`en-progreso` — un artículo Terminado o publicado se retira
+  desde Sitio, no por acá. Nunca toca `articles/archive/` ni SPIP.
+- **`public/js/duplicates.js` (nuevo):** UI en la pestaña Sitio — botón
+  "Buscar duplicados", radio por copia para elegir cuál conservar, botón
+  "Borrar no seleccionados" con `confirm()` explícito (mismo patrón que
+  `site-admin.js`).
+- **Tests:** `test/text-utils.test.mjs` (7 casos) + 8 casos nuevos en
+  `test/server.test.mjs` para ambos endpoints, incluyendo que
+  `archive/` nunca contribuye a un grupo de duplicados.
+
+**Archivos nuevos:** `src/lib/text-utils.mjs`, `public/js/duplicates.js`,
+`test/text-utils.test.mjs`.
+**Archivos modificados:** `src/lib/articles-store.mjs`, `src/server.mjs`,
+`public/js/dom.js`, `public/js/main.js`, `public/index.html`,
+`test/server.test.mjs`, `test/check-dom-ids.sh`.
+
+---
+
 ## [1.18.0] — 2026-09-13
 
 ### Archivo — artículos abribles en vista de detalle

@@ -854,6 +854,48 @@
     }
     .site-result.ok  { color: var(--green); }
     .site-result.err { color: var(--red); }
+
+    /* ── Duplicados locales ── */
+    .dup-result { margin-top: 0.75rem; }
+    .dup-ok { color: var(--green); font-size: 0.88rem; margin: 0; font-weight: 600; }
+
+    .dup-group {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.9rem 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .dup-group h4 { margin: 0 0 0.6rem; font-size: 0.9rem; font-weight: 700; }
+
+    .dup-list { list-style: none; padding: 0; margin: 0 0 0.6rem; }
+    .dup-item { border-top: 1px solid var(--border); padding: 0.5rem 0; }
+    .dup-item:first-child { border-top: none; }
+    .dup-item-label { display: flex; align-items: flex-start; gap: 0.55rem; cursor: pointer; }
+    .dup-item-label input[type="radio"] { margin-top: 0.2rem; flex-shrink: 0; }
+    .dup-item-main { flex: 1; min-width: 0; }
+    .dup-item-title-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .dup-item-id { font-size: 0.85rem; color: var(--text); background: rgba(255,255,255,0.06); border-radius: 3px; padding: 0.1rem 0.35rem; }
+    .dup-badge-keep { font-size: 0.72rem; border-radius: 999px; padding: 0.1rem 0.5rem; font-weight: 600; background: rgba(52,211,153,0.15); color: #34d399; }
+    .dup-item-meta { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; }
+
+    .dup-btn-delete {
+      background: transparent;
+      color: var(--red);
+      border: 1px solid var(--red);
+      padding: 0.35rem 0.8rem;
+      border-radius: var(--radius);
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .dup-btn-delete:hover:not(:disabled) { background: var(--red); color: #fff; }
+    .dup-btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .dup-group-result { font-size: 0.82rem; margin-top: 0.5rem; }
+    .dup-group-result.err { color: var(--red); }
   </style>
 </head>
 <body>
@@ -983,6 +1025,13 @@
       </div>
       <div id="audit-loading" class="audit-loading" style="display:none">Cargando…</div>
       <div id="audit-content"></div>
+    </div>
+
+    <div class="site-card" id="duplicates-panel">
+      <h3>Duplicados locales</h3>
+      <p class="site-help">Busca artículos con el mismo título (sin distinguir mayúsculas ni tildes) entre tus borradores activos. No incluye el Archivo ni artículos en SPIP.</p>
+      <button id="find-duplicates-btn" class="audit-refresh-btn">Buscar duplicados</button>
+      <div id="duplicates-result" class="dup-result"></div>
     </div>
 
     <div class="site-card">

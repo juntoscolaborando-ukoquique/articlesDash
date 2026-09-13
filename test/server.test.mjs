@@ -77,6 +77,7 @@ async function api(method, path, body) {
 const GET    = (p)       => api('GET',  p);
 const POST   = (p, b)    => api('POST', p, b);
 const PUT    = (p, b)    => api('PUT',  p, b);
+const DELETE = (p)       => api('DELETE', p);
 
 // ── Article fixtures ──────────────────────────────────────────────────────────
 
@@ -497,5 +498,98 @@ describe('workflow round-trip: edicion → en-progreso → terminado', () => {
     assert.equal(r3.data.workflowStatus, 'terminado');
 
     assert.equal(readArticle(id).workflowStatus, 'terminado');
+  });
+});
+
+// ── Tests: GET /api/articles/duplicates ──────────────────────────────────────
+
+describe('GET /api/articles/duplicates', () => {
+  beforeEach(() => clearArticles());
+
+  test('returns empty groups when no titles collide', async () => {
+    seedArticle({ id: 'unico-1', title: 'Un título único' });
+    seedArticle({ id: 'unico-2', title: 'Otro título distinto' });
+
+    const { status, data } = await GET('/api/articles/duplicates');
+    assert.equal(status, 200);
+    assert.equal(data.groups.length, 0);
+  });
+
+  test('groups articles with the same normalized title (case + tildes ignored)', async () => {
+    seedArticle({ id: 'dup-1', title: 'Marcha por la Memoria' });
+    seedArticle({ id: 'dup-2', title: 'marcha por la memoria' }); // sin tilde en "por", igual normalizado
+    seedArticle({ id: 'sin-dup', title: 'Algo completamente distinto' });
+
+    const { status, data } = await GET('/api/articles/duplicates');
+    assert.equal(status, 200);
+    assert.equal(data.groups.length, 1);
+
+    const group = data.groups[0];
+    assert.equal(group.articles.length, 2);
+    const ids = group.articles.map((a) => a.id).sort();
+    assert.deepEqual(ids, ['dup-1', 'dup-2']);
+  });
+
+  test('never includes articles from articles/archive/', async () => {
+    // seedArticle only writes into the active TMP_DIR, so simulate an
+    // archived duplicate by writing directly into TMP_DIR/archive/.
+    seedArticle({ id: 'active-copy', title: 'Título archivado o no' });
+    const archiveDir = path.join(TMP_DIR, 'archive');
+    fs.mkdirSync(archiveDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(archiveDir, 'archived-copy.json'),
+      JSON.stringify(validArticleJson({ id: 'archived-copy', title: 'Título archivado o no' })),
+      'utf8'
+    );
+
+    const { data } = await GET('/api/articles/duplicates');
+    assert.equal(data.groups.length, 0, 'archive/ must never contribute to duplicate groups');
+
+    fs.rmSync(archiveDir, { recursive: true, force: true });
+  });
+});
+
+// ── Tests: DELETE /api/articles/:id ───────────────────────────────────────────
+
+describe('DELETE /api/articles/:id', () => {
+  beforeEach(() => clearArticles());
+
+  test('returns 404 for unknown id', async () => {
+    const { status } = await DELETE('/api/articles/no-existe');
+    assert.equal(status, 404);
+  });
+
+  test('deletes a draft in edicion', async () => {
+    const id = seedArticle({ id: 'borrable-edicion', workflowStatus: 'edicion' });
+    const { status, data } = await DELETE(`/api/articles/${id}`);
+    assert.equal(status, 200);
+    assert.equal(data.success, true);
+    assert.equal(readArticle(id), null, 'file must be gone from disk');
+  });
+
+  test('deletes a draft in en-progreso', async () => {
+    const id = seedArticle({ id: 'borrable-en-progreso', workflowStatus: 'en-progreso' });
+    const { status } = await DELETE(`/api/articles/${id}`);
+    assert.equal(status, 200);
+    assert.equal(readArticle(id), null);
+  });
+
+  test('refuses to delete an article already published in SPIP', async () => {
+    const id = seedArticle({
+      id:             'ya-publicado',
+      workflowStatus: 'en-progreso',
+      spipArticleId:  '119',
+    });
+    const { status, data } = await DELETE(`/api/articles/${id}`);
+    assert.equal(status, 409);
+    assert.ok(data.error.includes('119'));
+    assert.ok(readArticle(id), 'file must still exist — delete must be refused');
+  });
+
+  test('refuses to delete a terminado article', async () => {
+    const id = seedArticle({ id: 'terminado-no-borrable', workflowStatus: 'terminado' });
+    const { status } = await DELETE(`/api/articles/${id}`);
+    assert.equal(status, 409);
+    assert.ok(readArticle(id), 'file must still exist — delete must be refused');
   });
 });

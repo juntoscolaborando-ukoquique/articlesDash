@@ -30,7 +30,7 @@ el backend que la sustenta esté verificado.
 ```
 Etapa 1 — Publicar    █████████████  ✅ CERRADA — primera corrida real: ID 109
 Etapa 2 — Dashboard   █████████████  ✅ CERRADA
-Etapa 3 — Editor      ██████░░░░░░░  🔄 EN CURSO — flujo básico ya en código
+Etapa 3 — Editor      ████████░░░░░  🔄 EN CURSO — duplicados locales cerrado (v1.20.0)
 Etapa 4 — IA pipeline ░░░░░░░░░░░░░  no iniciada
 ```
 
@@ -231,16 +231,15 @@ ahora. Ya existen:
   (`looksLikeStructuredPaste()`), como aviso no bloqueante — ver CHANGELOG 1.3.4.
 
 **Lo que falta para cerrar la etapa:**
-- **Detección y limpieza de duplicados locales en el Sitio** — cuando dos
-  borradores tienen títulos similares. Ver
-  [IMPLEMENTATION-ANALYSIS.md](IMPLEMENTATION-ANALYSIS.md) §2 ("Issue 2:
-  Duplicate detection") para los detalles de diseño, endpoints backend, UI
-  y estimación de esfuerzo (~7.5-9.5 horas). La feature está completamente
-  analizada y lista para implementar. Resumen: nuevo endpoint
-  `POST /api/site/find-local-duplicates`, card en Sitio tab, selector de
-  canonical con metadata (fecha, tamaño, palabras), botón para borrar duplicados
-  seleccionados. Incluye shared utility `src/lib/text-utils.mjs` con normalización
-  de títulos para evitar divergencia backend/frontend.
+- ~~Detección y limpieza de duplicados locales en el Sitio~~ ✅
+  **implementado 2026-09-13** (v1.20.0) — ver CHANGELOG 1.20.0. Difiere del
+  diseño original de [IMPLEMENTATION-ANALYSIS.md](IMPLEMENTATION-ANALYSIS.md)
+  §2 en dos puntos, ambos por respetar la separación de responsabilidades ya
+  establecida en el código: los endpoints viven bajo `/api/articles/*` (no
+  `/api/site/*` — comparar títulos es un concern de `articles-store.mjs`,
+  no de administración remota de SPIP) y la fecha de cada copia usa el
+  mtime del archivo en vez de parsear un timestamp del nombre (los ids hoy
+  son slugs, no siempre `articulo-<timestamp>`).
 
   **Scripts de diagnóstico ya disponibles** (ver también [REMOTE-MANAGE.md §11](REMOTE-MANAGE.md)):
 

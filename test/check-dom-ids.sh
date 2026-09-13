@@ -14,6 +14,7 @@
 ALLOWLIST=(
   "audit-panel"
   "server-offline-msg"
+  "duplicates-panel"
 )
 
 HTML="${HTML:-public/index.html}"

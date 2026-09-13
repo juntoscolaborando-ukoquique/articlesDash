@@ -48,6 +48,9 @@ export const siteDeleteIdInput = document.getElementById('site-delete-id');
 export const siteDeleteBtn     = document.getElementById('site-delete-btn');
 export const siteDeleteResult  = document.getElementById('site-delete-result');
 
+export const findDuplicatesBtn = document.getElementById('find-duplicates-btn');
+export const duplicatesResult  = document.getElementById('duplicates-result');
+
 export const auditRefreshBtn = document.getElementById('audit-refresh-btn');
 export const auditVerifyBtn  = document.getElementById('audit-verify-btn');
 export const auditLoading    = document.getElementById('audit-loading');

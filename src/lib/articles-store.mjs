@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { validateArticle } from './article-validator.mjs';
+import { normalizeTitle } from './text-utils.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARTICLES_DIR = process.env.ARTICLES_DIR_OVERRIDE
@@ -163,7 +164,7 @@ function slugify(title) {
  * so an article with id "archive" would be unreachable via the detail
  * endpoint). Reserved so uniqueArticleId() never hands one out.
  */
-const RESERVED_SLUGS = new Set(['archive']);
+const RESERVED_SLUGS = new Set(['archive', 'duplicates']);
 
 /**
  * Devuelve un id único basado en `baseSlug`, agregando un sufijo numérico
@@ -528,6 +529,96 @@ export function archiveArticle(id) {
 
   fs.renameSync(filepath, dest);
   pruneArchive();
+}
+
+/**
+ * Detecta artículos activos (articles/, nunca archive/) cuyo título
+ * normalizado coincide con el de otro artículo — candidatos a duplicado
+ * local. Cada grupo incluye metadata (fecha de modificación del archivo,
+ * tamaño, cantidad de palabras) para ayudar a decidir cuál conservar.
+ *
+ * Solo agrupa — no borra nada. El borrado es una decisión humana vía
+ * deleteArticleFile(), gateada en server.mjs.
+ *
+ * @returns {Array<{ normalizedTitle: string, articles: Array<object> }>}
+ *   Ordenado por tamaño de grupo descendente (más duplicados primero).
+ *   Dentro de cada grupo, los artículos van del más reciente al más viejo
+ *   (por mtime del archivo) — el primero es la sugerencia de "conservar".
+ */
+export function findDuplicateGroups() {
+  if (!fs.existsSync(ARTICLES_DIR)) return [];
+
+  const files = fs.readdirSync(ARTICLES_DIR).filter((f) => f.endsWith('.json'));
+
+  const byNormalizedTitle = new Map();
+  for (const filename of files) {
+    const filepath = path.join(ARTICLES_DIR, filename);
+    const article = readArticleFile(filepath);
+    if (!article) continue;
+
+    const normalized = normalizeTitle(article.title);
+    if (!normalized) continue; // sin título — no hay nada que comparar
+
+    if (!byNormalizedTitle.has(normalized)) byNormalizedTitle.set(normalized, []);
+    byNormalizedTitle.get(normalized).push({ filepath, filename, article });
+  }
+
+  const groups = [];
+  for (const [normalized, entries] of byNormalizedTitle) {
+    if (entries.length < 2) continue; // sin duplicado, no interesa
+
+    const members = entries.map(({ filepath, filename, article }) => {
+      const stat = fs.statSync(filepath);
+      const wordCount = article.contentHtml
+        ? article.contentHtml.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length
+        : 0;
+
+      return {
+        id: article.id ?? filename.replace('.json', ''),
+        filename,
+        title: article.title,
+        workflowStatus: article.workflowStatus ?? 'terminado',
+        spipArticleId: article.spipArticleId ?? null,
+        modifiedAtMs: stat.mtimeMs,
+        fileSize: stat.size,
+        wordCount,
+      };
+    });
+
+    // Más reciente primero — es la sugerencia de "conservar" en la UI.
+    members.sort((a, b) => b.modifiedAtMs - a.modifiedAtMs);
+    groups.push({ normalizedTitle: normalized, articles: members });
+  }
+
+  // Grupos con más copias primero; empate por orden alfabético del título.
+  groups.sort(
+    (a, b) => b.articles.length - a.articles.length || a.normalizedTitle.localeCompare(b.normalizedTitle)
+  );
+  return groups;
+}
+
+/**
+ * Borra permanentemente el archivo local de un artículo. Sin gate propio —
+ * las reglas de negocio (no borrar si tiene spipArticleId, no borrar fuera
+ * de Edición/En Progreso) viven en server.mjs, igual que el gate de
+ * validateArticle en /promote vive ahí y no en promoteToTerminado().
+ *
+ * Nunca toca articles/archive/ ni SPIP — solo el archivo en articles/.
+ *
+ * @param {string} id
+ * @returns {{ filename: string, sizeBytes: number }}
+ * @throws si el artículo no existe
+ */
+export function deleteArticleFile(id) {
+  const found = findArticleById(id);
+  if (!found) throw new Error(`Artículo no encontrado: ${id}`);
+
+  const { filepath } = found;
+  const filename = path.basename(filepath);
+  const sizeBytes = fs.statSync(filepath).size;
+
+  fs.unlinkSync(filepath);
+  return { filename, sizeBytes };
 }
 
 /**

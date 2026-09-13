@@ -4,8 +4,9 @@
  * Responsabilidades: cargar la lista de artículos, wirear la navegación
  * central (tabs, refresh, volver), y arrancar los fetches iniciales. Cada
  * módulo de vista (list-view, detail-view, editor, site-admin,
- * audit-report) wirea sus propios controles internos al importarse — este
- * archivo sólo conecta lo que es genuinamente "routing" entre vistas.
+ * audit-report, duplicates) wirea sus propios controles internos al
+ * importarse — este archivo sólo conecta lo que es genuinamente "routing"
+ * entre vistas.
  */
 
 'use strict';
@@ -20,6 +21,7 @@ import { loadAllowedTagsFromSchema } from './detail-view.js';
 import './editor.js';
 import './site-admin.js';
 import './audit-report.js';
+import './duplicates.js';
 
 // ── Core navigation ───────────────────────────────────────────────────────
 

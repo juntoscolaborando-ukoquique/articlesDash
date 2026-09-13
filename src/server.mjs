@@ -32,6 +32,8 @@ import {
   sendToRevision,
   archiveArticle,
   findArticleAbsolutePath,
+  findDuplicateGroups,
+  deleteArticleFile,
 } from './lib/articles-store.mjs';
 import { validateArticle, ALLOWED_TAGS } from './lib/article-validator.mjs';
 import { publishArticleUseCase } from './lib/publish-use-case.mjs';
@@ -145,6 +147,52 @@ app.get('/api/schema/allowed-tags', asyncHandler('GET /api/schema/allowed-tags',
 
 app.get('/api/articles/archive', asyncHandler('GET /api/articles/archive', async (_req, res) => {
   res.json({ articles: listArchive() });
+}));
+
+// ── API: duplicados locales (Etapa 3 — detección de títulos coincidentes) ────
+//
+// Compara solo articles/ activos (nunca archive/, nunca SPIP) por título
+// normalizado. Puramente informativo — no borra nada. Debe declararse antes
+// de GET /api/articles/:id (mismo motivo que /api/articles/archive arriba):
+// si no, "duplicates" sería tratado como un id de artículo. 'duplicates'
+// también está en RESERVED_SLUGS (articles-store.mjs) para que ningún
+// artículo pueda terminar con ese id.
+
+app.get('/api/articles/duplicates', asyncHandler('GET /api/articles/duplicates', async (_req, res) => {
+  res.json({ groups: findDuplicateGroups() });
+}));
+
+// ── API: borrar borrador local (limpieza de duplicados) ──────────────────────
+//
+// Nunca toca SPIP ni articles/archive/. Bloqueado si el artículo ya está
+// publicado (tiene spipArticleId) o si no está en Edición/En Progreso —
+// un artículo Terminado o publicado se retira vía Sitio (cambiar estado /
+// borrado permanente), no por acá. Ver Etapa 3.5 del ROADMAP para el flujo
+// de retractación de artículos ya publicados.
+
+app.delete('/api/articles/:id', asyncHandler('DELETE /api/articles/:id', async (req, res) => {
+  const { id } = req.params;
+  const article = loadActiveArticleOr404(id, res);
+  if (!article) return;
+
+  if (article.spipArticleId) {
+    return res.status(409).json({
+      error: `No se puede borrar: ya publicado en SPIP (#${article.spipArticleId}). ` +
+             `Usa la pestaña Sitio para retirarlo de SPIP primero.`,
+    });
+  }
+
+  const status = article.workflowStatus ?? 'terminado';
+  if (!['edicion', 'en-progreso'].includes(status)) {
+    return res.status(409).json({
+      error: `No se puede borrar un artículo en estado "${status}". ` +
+             `Solo se pueden borrar borradores en Edición o En Progreso.`,
+    });
+  }
+
+  const { filename, sizeBytes } = deleteArticleFile(id);
+  console.log(`[delete] "${id}" borrado (${filename}, ${sizeBytes} bytes)`);
+  res.json({ success: true, filename, sizeBytes });
 }));
 
 // ── API: detalle de artículo ──────────────────────────────────────────────────
