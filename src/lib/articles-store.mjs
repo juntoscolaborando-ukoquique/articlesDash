@@ -29,7 +29,89 @@ const ARCHIVE_DIR = path.join(ARTICLES_DIR, 'archive');
 const ARTICLES_LIMIT = 100;  // max articles in articles/ before auto-archiving
 const ARCHIVE_LIMIT  = 200;  // max articles in articles/archive/ before hard-deleting oldest
 
+const AUDIT_LOG_PATH = path.join(__dirname, '..', '..', 'live-write-audit.log.jsonl');
+
+// Cache for the two maps derived from the audit log (see getAuditLogMaps()
+// below). Keyed by the log file's mtime + size so a change is always
+// detected without hashing the content — cheap to check (one fs.statSync)
+// on every listArticles() call, only re-parsed when the file actually grew.
+let auditLogCache = null; // { mtimeMs, size, previousSpipIdsBySlug, lastKnownSpipIdBySlug }
+
+/**
+ * Parses live-write-audit.log.jsonl into the two lookup maps listArticles()
+ * needs (previousSpipIdsBySlug, lastKnownSpipIdBySlug), caching the result
+ * against the file's mtime + size.
+ *
+ * Why this exists: the log is append-only and never rotated — every publish
+ * attempt, ever, adds a line and nothing removes one. listArticles() runs on
+ * essentially every dashboard interaction (after every promote/demote/
+ * publish, plus every manual refresh), so re-reading and re-parsing the
+ * whole file synchronously on every single call would mean the cost grows
+ * with *all-time* publish attempts, not with the current article count —
+ * and being synchronous, it blocks Node's single event loop for its
+ * duration on every call, stalling any other in-flight request. Caching
+ * against mtime+size means the file is only actually re-parsed when it has
+ * grown since the last read.
+ *
+ * @returns {{ previousSpipIdsBySlug: Map<string,string[]>, lastKnownSpipIdBySlug: Map<string,string> }}
+ */
+function getAuditLogMaps() {
+  if (!fs.existsSync(AUDIT_LOG_PATH)) {
+    return { previousSpipIdsBySlug: new Map(), lastKnownSpipIdBySlug: new Map() };
+  }
+
+  const { mtimeMs, size } = fs.statSync(AUDIT_LOG_PATH);
+  if (auditLogCache && auditLogCache.mtimeMs === mtimeMs && auditLogCache.size === size) {
+    return auditLogCache;
+  }
+
+  const entries = fs
+    .readFileSync(AUDIT_LOG_PATH, 'utf8')
+    .split('\n')
+    .flatMap((line) => {
+      if (!line.trim()) return [];
+      try { return [JSON.parse(line)]; } catch { return []; }
+    });
+
+  // target.id has different semantics per action — 'article.create' uses
+  // the local slug, 'article.delete.permanent' uses the numeric SPIP id.
+  // Same rule as auditLogReport() in spip-admin.mjs; must not mix them.
+  const permanentlyDeletedSpipIds = new Set(
+    entries
+      .filter((e) => e.action === 'article.delete.permanent' && e.result === 'success')
+      .map((e) => String(e.target?.id))
+  );
+
+  const previousSpipIdsBySlug = new Map();
+  const lastKnownSpipIdBySlug = new Map();
+
+  for (const entry of entries) {
+    if (entry.action !== 'article.create' || entry.result !== 'success') continue;
+    if (!entry.target?.id || !entry.articleId) continue;
+    if (permanentlyDeletedSpipIds.has(String(entry.articleId))) continue; // deleted on purpose — nothing pending
+
+    const slug = entry.target.id;
+    if (!previousSpipIdsBySlug.has(slug)) previousSpipIdsBySlug.set(slug, []);
+    previousSpipIdsBySlug.get(slug).push(String(entry.articleId));
+  }
+
+  // lastKnownSpipId: the most recent create-success SPIP ID for a slug,
+  // regardless of deletion status. Used as a historical reference when
+  // spipArticleId is null — shown muted in the dashboard, not as a warning.
+  // Iterating the same entries array avoids re-reading the log file.
+  for (const entry of entries) {
+    if (entry.action !== 'article.create' || entry.result !== 'success') continue;
+    if (!entry.target?.id || !entry.articleId) continue;
+    // Overwrite each time — log is append-only so last entry is most recent
+    lastKnownSpipIdBySlug.set(entry.target.id, String(entry.articleId));
+  }
+
+  auditLogCache = { mtimeMs, size, previousSpipIdsBySlug, lastKnownSpipIdBySlug };
+  return auditLogCache;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 function readArticleFile(filepath) {
   try {
@@ -143,48 +225,12 @@ export function listArticles() {
   // audit log to PROJECT_ROOT regardless of that override. Deriving the
   // path from ARTICLES_DIR silently breaks this feature whenever the two
   // diverge, same edge case documented in spip-admin.mjs's auditLogReport().
-  const previousSpipIdsBySlug = new Map();
-  const lastKnownSpipIdBySlug = new Map();
-  const auditLogPath = path.join(__dirname, '..', '..', 'live-write-audit.log.jsonl');
-  if (fs.existsSync(auditLogPath)) {
-    const entries = fs
-      .readFileSync(auditLogPath, 'utf8')
-      .split('\n')
-      .flatMap((line) => {
-        if (!line.trim()) return [];
-        try { return [JSON.parse(line)]; } catch { return []; }
-      });
+  //
+  // See getAuditLogMaps() above — cached against the log's mtime+size so
+  // this doesn't re-read and re-parse the whole (never-rotated) file on
+  // every single call.
+  const { previousSpipIdsBySlug, lastKnownSpipIdBySlug } = getAuditLogMaps();
 
-    // target.id has different semantics per action — 'article.create' uses
-    // the local slug, 'article.delete.permanent' uses the numeric SPIP id.
-    // Same rule as auditLogReport() in spip-admin.mjs; must not mix them.
-    const permanentlyDeletedSpipIds = new Set(
-      entries
-        .filter((e) => e.action === 'article.delete.permanent' && e.result === 'success')
-        .map((e) => String(e.target?.id))
-    );
-
-    for (const entry of entries) {
-      if (entry.action !== 'article.create' || entry.result !== 'success') continue;
-      if (!entry.target?.id || !entry.articleId) continue;
-      if (permanentlyDeletedSpipIds.has(String(entry.articleId))) continue; // deleted on purpose — nothing pending
-
-      const slug = entry.target.id;
-      if (!previousSpipIdsBySlug.has(slug)) previousSpipIdsBySlug.set(slug, []);
-      previousSpipIdsBySlug.get(slug).push(String(entry.articleId));
-    }
-
-    // lastKnownSpipId: the most recent create-success SPIP ID for a slug,
-    // regardless of deletion status. Used as a historical reference when
-    // spipArticleId is null — shown muted in the dashboard, not as a warning.
-    // Iterating the same entries array avoids re-reading the log file.
-    for (const entry of entries) {
-      if (entry.action !== 'article.create' || entry.result !== 'success') continue;
-      if (!entry.target?.id || !entry.articleId) continue;
-      // Overwrite each time — log is append-only so last entry is most recent
-      lastKnownSpipIdBySlug.set(entry.target.id, String(entry.articleId));
-    }
-  }
 
   return fs
     .readdirSync(ARTICLES_DIR)
