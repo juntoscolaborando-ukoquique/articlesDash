@@ -214,60 +214,48 @@ Publicar un artículo desde el browser sin tocar la terminal.
 
 ## Etapa 3 — Editor de artículos (texto imperfecto → JSON listo)
 
-**Estado real (actualizado 2026-09-06):** parte de esta etapa ya está en
-código, aunque ninguna entrada de CHANGELOG.md la había documentado hasta
-ahora. Ya existen:
+**Estado real (actualizado 2026-09-13):**
 
-- Flujo de tres pasos `edicion` → `en-progreso` → `terminado`
-  (`workflowStatus` en `articles-store.mjs`, endpoints `demote` / `promote` /
-  `send-to-edicion` / `send-to-revision` en `server.mjs`, pestañas
-  correspondientes en `app.js`).
-- Pantalla de Edición mínima: título + cuadro de texto libre, que el backend
-  convierte a `contentHtml` restringido vía `textToParagraphHtml()`
-  (`PUT /api/articles/:id/draft`).
-- Auto-corrección: un artículo declarado "terminado" que deja de pasar
-  `validateArticle()` se degrada solo a "en-progreso" en la próxima lectura.
-- Guardia contra pegar JSON/HTML en crudo en el cuadro de texto libre
-  (`looksLikeStructuredPaste()`), como aviso no bloqueante — ver CHANGELOG 1.3.4.
+### ✅ Implementado
 
-**Lo que falta para cerrar la etapa:**
-- ~~Detección y limpieza de duplicados locales en el Sitio~~ ✅
-  **implementado 2026-09-13** (v1.20.0) — ver CHANGELOG 1.20.0. Difiere del
-  diseño original de [IMPLEMENTATION-ANALYSIS.md](IMPLEMENTATION-ANALYSIS.md)
-  §2 en dos puntos, ambos por respetar la separación de responsabilidades ya
-  establecida en el código: los endpoints viven bajo `/api/articles/*` (no
-  `/api/site/*` — comparar títulos es un concern de `articles-store.mjs`,
-  no de administración remota de SPIP) y la fecha de cada copia usa el
-  mtime del archivo en vez de parsear un timestamp del nombre (los ids hoy
-  son slugs, no siempre `articulo-<timestamp>`).
+- **Flujo de tres pasos** `edicion` → `en-progreso` → `terminado` con transiciones
+  bidireccionales (`demote` / `promote` / `send-to-edicion` / `send-to-revision`
+  en `server.mjs`, pestañas con colores distintos en el dashboard).
+- **Pantalla de Edición:** título + cuadro de texto libre; el backend convierte a
+  `contentHtml` restringido vía `textToParagraphHtml()` (`PUT /api/articles/:id/draft`).
+  Historial local de borradores en `localStorage` (hasta 5 snapshots).
+- **Pantalla de En Progreso:** formulario editable con todos los campos del schema
+  separados — `chapo`, `contentHtml`, `ps`, `topics`, `date`, `author`,
+  `sourceSite`, `sourceUrl`, `sourceDate` — en textboxes individuales
+  (`PUT /api/articles/:id/fields`). Ver CHANGELOG 1.9.0.
+- **Splitter heurístico** (`src/lib/field-splitter.mjs`): en la transición
+  Edición → En Progreso, separa automáticamente el texto en `chapo` / `contentHtml` /
+  `ps` y extrae metadata (fuente, autor, fecha) por patrón. Diseñado para ser
+  reemplazado por Groq en Etapa 4 sin cambios en la UI ni en los endpoints.
+- **Auto-corrección:** un artículo en Terminado que deja de pasar `validateArticle()`
+  se degrada solo a En Progreso en la próxima lectura (`listArticles()`).
+- **Validación con parser real** (`parse5`): `article-validator.mjs` usa un DOM
+  walk spec-compliant en lugar de regex. Ver CHANGELOG 1.21.0 y `docs/RISKS.md` #3.
+- **Detección y borrado de duplicados locales** en la pestaña Sitio
+  (`GET /api/articles/duplicates`, `DELETE /api/articles/:id`, `public/js/duplicates.js`).
+  Ver CHANGELOG 1.20.0.
+- **Aviso contra pegado estructurado** (`looksLikeStructuredPaste()` en
+  `src/lib/text-to-html.mjs`): aviso no bloqueante cuando el texto pegado parece
+  JSON o HTML complejo.
+- **Navegación automática post-transición:** al cambiar de sección, el dashboard
+  salta al tab correcto y resalta la fila del artículo.
+- **Artículos archivados abribles** en vista de detalle (solo lectura) desde
+  la pestaña Archivo.
 
-  **Scripts de diagnóstico ya disponibles** (ver también [REMOTE-MANAGE.md §11](REMOTE-MANAGE.md)):
+### 🔲 Pendiente (no bloquea Etapa 4)
 
-  - `node src/scripts/find-duplicate-spip-articles.mjs` — escanea el audit
-    log y las páginas de administración SPIP buscando artículos publicados
-    más de una vez (mismo slug local → múltiples IDs SPIP). Genera un
-    informe en `tmp/spip-duplicates-report.json`. Útil antes de cualquier
-    limpieza manual.
-
-  - `node src/scripts/extract-spip-article.mjs <id>` — vuelca todos los
-    campos de un artículo SPIP (titre, texte, chapo, ps, sectionId, etc.)
-    como JSON en stdout. Útil para inspeccionar el contenido real de un ID
-    antes de decidir cuál conservar como canónico, o para recrear un
-    artículo con contenido corrupto (ver CHANGELOG 1.12.0).
-
-- Editor real de campos (surtitre, soustitre, chapo, ps, topics, coverImage) —
-  hoy Edición solo cubre título + cuerpo en texto plano.
-  → El plan detallado estuvo en **docs/IMPROVE_STEPS.md** (implementado y eliminado en v1.16.0 — ver CHANGELOG 1.9.0).
-  El splitter heurístico + formulario editable en En Progreso ya están en código;
-  diseñado para que Groq (Etapa 4) se enchufe en el mismo punto sin tocar la UI.
-- Rich-text (Tiptap) en vez de textarea plano, si se decide que hace falta
-  para el contenido real que se está publicando.
-- Sanitización explícita (DOMPurify o equivalente) antes de que el HTML
-  pegado llegue a `article-validator.mjs`, en vez de depender solo de la
-  detección heurística de `looksLikeStructuredPaste()`.
-- Antes de abrir el editor a pegado de HTML más libre, resolver la deuda
-  técnica ya documentada en 1.3.3: reemplazar el validador de HTML basado en
-  regex por un parser real (`node-html-parser` o `parse5`).
+- **Rich-text (Tiptap)** en vez de textarea plano — aplazado hasta que el flujo
+  con Groq esté estable y se evalúe si realmente hace falta.
+- **Sanitización explícita (DOMPurify)** antes de que HTML pegado llegue al
+  validador — mitigado parcialmente por `looksLikeStructuredPaste()` y el parser
+  real; pendiente si se abre el editor a pegado de HTML más libre.
+- **Retractación de artículos ya publicados** desde el dashboard (Etapa 3.5 —
+  ver sección separada más abajo).
 
 ### Entregable de cierre
 El cliente puede crear un artículo completo desde el browser y publicarlo
