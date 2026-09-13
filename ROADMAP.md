@@ -351,19 +351,26 @@ PLAN_KILOMBO.md §5).
 
 ### Decisiones abiertas (a tomar antes de implementar)
 
-1. **¿Automático o con confirmación?** — En la Transición 1, ¿el usuario
-   ve el artículo ya estructurado y puede editar antes de confirmar, o se
-   aplica sin previa vista? Recomendación: mostrar los campos propuestos en
-   un paso intermedio ("Groq sugiere esto — ¿confirmar?") para que el editor
-   tenga control.
+1. **¿Automático o con confirmación?** — En la Transición 1, Groq se aplica
+   automáticamente al pasar a En Progreso — no hay paso intermedio de
+   confirmación. La transición es fácilmente reversible (botón "Enviar a
+   Edición" siempre disponible). Lo que sí es obligatorio: la pantalla de
+   En Progreso debe mostrar **todos los campos del schema** (título,
+   subtítulo, chapo, cuerpo, ps, topics, sección, fuente, etc.) en
+   textboxes individuales y editables, de modo que el usuario vea
+   claramente cómo Groq ha tratado cada línea del artículo y pueda
+   corregir antes de aprobar.
 
-2. **Manejo de errores de Groq** — si la API falla o devuelve JSON
-   malformado, ¿se bloquea la transición o se deja pasar el artículo en
-   crudo? Recomendación: dejar pasar con aviso, no bloquear el workflow.
+2. **Manejo de errores de Groq** — Si la API falla, agota el tiempo de
+   espera o devuelve JSON malformado, **el backend pregunta al usuario si
+   desea continuar de todas formas**. Si acepta, el artículo pasa a En
+   Progreso con el contenido sin estructurar (mismo comportamiento que el
+   splitter heurístico hoy). Si rechaza, se queda en Edición. El workflow
+   nunca se bloquea sin dar al usuario la opción de ignorar el fallo.
 
-3. **Prompt engineering** — los prompts son parte del código y deben estar
-   versionados en `src/lib/groq-enrichment.mjs`, no hardcodeados en los
-   handlers.
+3. **Dónde viven los prompts** — Tratados como código: versionados dentro
+   de `src/lib/groq-enrichment.mjs`, no en los route handlers de
+   `server.mjs` ni dispersos en otros archivos.
 
 ### Entregable de cierre
 
