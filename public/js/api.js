@@ -24,7 +24,7 @@
 'use strict';
 
 import { showToast, apiFetch } from './utils.js';
-import { setActiveTab, showListView } from './list-view.js';
+import { setActiveTab, showListView, loadArchive } from './list-view.js';
 
 async function postTransition(endpoint, {
   btn,
@@ -93,13 +93,14 @@ export async function publishArticle(id, btn, onSettled) {
         // calling loadArchive() a second time.
         return {
           success: true,
-          settle: false, // skip generic loadArticles — we navigate away instead
+          settle: false,
           toastType: 'success',
           toastDuration: 7000,
           message: `✅ Publicado en SPIP (ID #${data.spipArticleId}) — el artículo pasó al Archivo.`,
           onSuccess: async () => {
             showListView();
-            await setActiveTab('archivo');
+            setActiveTab('archivo', { autoLoad: false });
+            await loadArchive({ highlightId: id, spipId: data.spipArticleId });
           },
         };
       }

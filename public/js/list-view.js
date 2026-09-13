@@ -66,7 +66,7 @@ export function focusArticleInList(articleId) {
 // (undefined otherwise) so callers that need to know when the tab's data has
 // finished loading — e.g. api.js after an auto-archiving publish — can await
 // it instead of calling loadArchive() a second time themselves.
-export function setActiveTab(tab) {
+export function setActiveTab(tab, { autoLoad = true } = {}) {
   state.activeTab = tab;
   tabBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
   newArticleBtn.style.display = tab === 'edicion' ? '' : 'none';
@@ -78,7 +78,7 @@ export function setActiveTab(tab) {
   viewSite.style.display  = 'none';
   viewList.style.display  = 'block';
   if (tab === 'archivo') {
-    return loadArchive();
+    return autoLoad ? loadArchive() : undefined;
   }
   renderTable(state.articles);
   return undefined;
@@ -338,7 +338,7 @@ export async function loadArticles() {
 
 // ── Archive tab ───────────────────────────────────────────────────────────
 
-export async function loadArchive() {
+export async function loadArchive({ highlightId, spipId } = {}) {
   tbody.innerHTML = '<tr class="state-row"><td colspan="6">Cargando archivo…</td></tr>';
   countEl.textContent = 'Archivo';
   try {
@@ -347,14 +347,14 @@ export async function loadArchive() {
     const data = await res.json();
     const archived = data.articles ?? [];
     countArchivo.textContent = archived.length;
-    renderArchiveTable(archived);
+    renderArchiveTable(archived, { highlightId, spipId });
   } catch (err) {
     tbody.innerHTML = `<tr class="state-row"><td colspan="6">Error al cargar el archivo: ${escHtml(err.message)}</td></tr>`;
     showToast(`Error al cargar el archivo: ${err.message}`, 'error');
   }
 }
 
-export function renderArchiveTable(data) {
+export function renderArchiveTable(data, { highlightId, spipId } = {}) {
   tbody.innerHTML = '';
 
   if (!data.length) {
@@ -364,6 +364,14 @@ export function renderArchiveTable(data) {
   }
 
   countEl.textContent = `Archivo — ${data.length} artículo${data.length !== 1 ? 's' : ''}`;
+
+  // If we just published an article, show a persistent success banner above the table
+  if (highlightId && spipId) {
+    const banner = document.createElement('tr');
+    banner.className = 'state-row archive-publish-banner';
+    banner.innerHTML = `<td colspan="6">✅ Publicado en SPIP como <strong>ID #${escHtml(String(spipId))}</strong> y movido al archivo.</td>`;
+    tbody.appendChild(banner);
+  }
 
   for (const article of data) {
     const tr = document.createElement('tr');
