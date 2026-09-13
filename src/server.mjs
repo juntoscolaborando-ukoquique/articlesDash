@@ -31,6 +31,7 @@ import {
   sendToEdicion,
   sendToRevision,
   archiveArticle,
+  findArticleAbsolutePath,
 } from './lib/articles-store.mjs';
 import { validateArticle, ALLOWED_TAGS } from './lib/article-validator.mjs';
 import { publishArticleUseCase } from './lib/publish-use-case.mjs';
@@ -83,6 +84,26 @@ function loadArticleOr404(id, res) {
     return null;
   }
   return article;
+}
+
+// Same as loadArticleOr404(), but rejects an id that only exists in
+// articles/archive/. loadArticle() (above) transparently falls back to
+// archive/ so the read-only GET /api/articles/:id route can open an
+// archived article's detail view — but every route that *mutates* an
+// article (demote, promote, draft, send-to-*, fields, publish, recover)
+// ultimately calls writeBack(), which only ever looks in articles/ and
+// throws "Artículo no encontrado" if the file isn't there. Without this
+// guard, an archived id sails past the 404 check here and then 500s deep
+// inside writeBack() instead of failing cleanly at the door — archive is
+// meant to be read-only from the dashboard (see enforceArchiveLimit() /
+// archiveArticle() in articles-store.mjs), so treat "only in archive/" the
+// same as "doesn't exist" for these routes.
+function loadActiveArticleOr404(id, res) {
+  if (!findArticleAbsolutePath(id)) {
+    res.status(404).json({ error: 'Artículo no encontrado' });
+    return null;
+  }
+  return loadArticleOr404(id, res);
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -142,7 +163,7 @@ app.get('/api/articles/:id', asyncHandler('GET /api/articles/:id', async (req, r
 
 app.post('/api/articles/:id/archive', asyncHandler('POST /api/articles/:id/archive', async (req, res) => {
   const { id } = req.params;
-  if (!loadArticleOr404(id, res)) return;
+  if (!loadActiveArticleOr404(id, res)) return;
   archiveArticle(id);
   res.json({ success: true });
 }));
@@ -154,7 +175,7 @@ app.post('/api/articles/:id/archive', asyncHandler('POST /api/articles/:id/archi
 
 app.post('/api/articles/:id/demote', asyncHandler('POST /api/articles/:id/demote', async (req, res) => {
   const { id } = req.params;
-  if (!loadArticleOr404(id, res)) return;
+  if (!loadActiveArticleOr404(id, res)) return;
 
   demoteToEnProgreso(id);
   res.json({ success: true, workflowStatus: 'en-progreso' });
@@ -167,7 +188,7 @@ app.post('/api/articles/:id/demote', asyncHandler('POST /api/articles/:id/demote
 
 app.post('/api/articles/:id/promote', asyncHandler('POST /api/articles/:id/promote', async (req, res) => {
   const { id } = req.params;
-  const article = loadArticleOr404(id, res);
+  const article = loadActiveArticleOr404(id, res);
   if (!article) return;
 
   const errors = validateArticle(article);
@@ -189,7 +210,7 @@ app.post('/api/articles/:id/promote', asyncHandler('POST /api/articles/:id/promo
 
 app.put('/api/articles/:id/draft', asyncHandler('PUT /api/articles/:id/draft', async (req, res) => {
   const { id } = req.params;
-  const article = loadArticleOr404(id, res);
+  const article = loadActiveArticleOr404(id, res);
   if (!article) return;
 
   const title = typeof req.body?.title === 'string' ? req.body.title : article.title;
@@ -216,7 +237,7 @@ app.put('/api/articles/:id/draft', asyncHandler('PUT /api/articles/:id/draft', a
 
 app.post('/api/articles/:id/send-to-edicion', asyncHandler('POST /api/articles/:id/send-to-edicion', async (req, res) => {
   const { id } = req.params;
-  if (!loadArticleOr404(id, res)) return;
+  if (!loadActiveArticleOr404(id, res)) return;
 
   sendToEdicion(id);
   res.json({ success: true, workflowStatus: 'edicion' });
@@ -230,7 +251,7 @@ app.post('/api/articles/:id/send-to-edicion', asyncHandler('POST /api/articles/:
 
 app.post('/api/articles/:id/send-to-revision', asyncHandler('POST /api/articles/:id/send-to-revision', async (req, res) => {
   const { id } = req.params;
-  const article = loadArticleOr404(id, res);
+  const article = loadActiveArticleOr404(id, res);
   if (!article) return;
 
   if (!article.title?.trim() || !article.contentHtml?.trim() || !article.section?.trim()) {
@@ -273,7 +294,7 @@ const FIELDS_EDITABLE_KEYS = [
 
 app.put('/api/articles/:id/fields', asyncHandler('PUT /api/articles/:id/fields', async (req, res) => {
   const { id } = req.params;
-  const article = loadArticleOr404(id, res);
+  const article = loadActiveArticleOr404(id, res);
   if (!article) return;
 
   const body = req.body ?? {};
@@ -300,7 +321,7 @@ app.post('/api/articles/:id/publish', asyncHandler('POST /api/articles/:id/publi
   const { id } = req.params;
 
   // Quick guard before acquiring the lock
-  const article = loadArticleOr404(id, res);
+  const article = loadActiveArticleOr404(id, res);
   if (!article) return;
   if (article.spipArticleId) {
     return res.status(409).json({
@@ -502,7 +523,7 @@ app.post('/api/site/duplicates/:spipId/confirm-deleted', asyncHandler('POST /api
 // Escribe spipArticleId de vuelta en el JSON cuando el write-back falló antes.
 app.post('/api/articles/:id/recover', asyncHandler('POST /api/articles/:id/recover', async (req, res) => {
   const { id } = req.params;
-  const article = loadArticleOr404(id, res);
+  const article = loadActiveArticleOr404(id, res);
   if (!article) return;
 
   if (article.spipArticleId) {

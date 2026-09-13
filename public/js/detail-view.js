@@ -23,13 +23,13 @@ export function showDetailViewLoading() {
 
 // ── Detail view ───────────────────────────────────────────────────────────
 
-export async function openDetail(id) {
+export async function openDetail(id, { isArchived = false } = {}) {
   showDetailViewLoading();
   try {
     const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { article } = await res.json();
-    renderDetail(article);
+    renderDetail(article, { isArchived });
   } catch (err) {
     renderError(detailContent, err, 'Error al cargar el artículo');
     showToast(`Error al cargar el artículo: ${err.message}`, 'error');
@@ -54,7 +54,7 @@ function spipHtmlFor(article) {
     : `<span class="spip-id">#${escHtml(String(article.spipArticleId))}</span>`;
 }
 
-function buildDetailHtml(article, { isPublished, status, isTerminadoDetail }) {
+function buildDetailHtml(article, { isPublished, status, isTerminadoDetail, isArchived }) {
   return `
     <div class="detail-card">
       <div class="detail-header">
@@ -109,6 +109,9 @@ function buildDetailHtml(article, { isPublished, status, isTerminadoDetail }) {
 
       <div class="detail-footer">
         <span style="color:var(--muted); font-size:0.82rem">id: ${escHtml(article.id)}</span>
+        ${isArchived ? `
+          <span style="color:var(--muted); font-size:0.82rem">📦 Archivado — solo lectura</span>
+        ` : `
         <span>
           ${article.workflowStatus === 'en-progreso'
             ? `<button class="copy-btn" id="detail-copy-btn" data-article-id="${escHtml(article.id)}">📋 Copiar contenido</button>`
@@ -124,6 +127,7 @@ function buildDetailHtml(article, { isPublished, status, isTerminadoDetail }) {
                <button class="edicion-btn" id="detail-edicion-btn" data-article-id="${escHtml(article.id)}">Enviar a Edición</button>`
           }
         </span>
+        `}
       </div>
     </div>
   `;
@@ -195,14 +199,20 @@ function wireCopyButton(article) {
   });
 }
 
-export function renderDetail(article) {
+export function renderDetail(article, { isArchived = false } = {}) {
   const isPublished = Boolean(article.spipArticleId);
   const status = isPublished ? 'publicado' : 'listo';
   // GET /api/articles/:id devuelve el JSON crudo (loadArticle), no el objeto
   // mapeado de listArticles() — mismo default de ausencia que allá.
   const isTerminadoDetail = (article.workflowStatus ?? 'terminado') === 'terminado';
 
-  detailContent.innerHTML = buildDetailHtml(article, { isPublished, status, isTerminadoDetail });
+  detailContent.innerHTML = buildDetailHtml(article, { isPublished, status, isTerminadoDetail, isArchived });
+
+  // Archived articles are read-only from the dashboard (writeBack() only
+  // ever looks in articles/, never archive/ — see loadActiveArticleOr404()
+  // in server.mjs) — buildDetailHtml() already omitted every action button
+  // above, so there's nothing here to wire up.
+  if (isArchived) return;
 
   wirePublishButton(article, isPublished);
   wireApprovalButtons(article, isTerminadoDetail);

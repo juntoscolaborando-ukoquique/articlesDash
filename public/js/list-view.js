@@ -385,7 +385,7 @@ export function renderArchiveTable(data, { highlightId, spipId } = {}) {
     titleEl.style.color = 'var(--muted)';
     titleEl.title = 'Ver detalle';
     titleEl.textContent = article.title || '(sin título)';
-    titleEl.addEventListener('click', () => openDetail(article.id));
+    titleEl.addEventListener('click', () => openDetail(article.id, { isArchived: true }));
     tdTitle.appendChild(titleEl);
     const hint = document.createElement('div');
     hint.className = 'title-hint';
