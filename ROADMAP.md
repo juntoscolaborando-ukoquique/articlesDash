@@ -372,6 +372,44 @@ PLAN_KILOMBO.md §5).
    de `src/lib/groq-enrichment.mjs`, no en los route handlers de
    `server.mjs` ni dispersos en otros archivos.
 
+### Restricciones de implementación (cerradas)
+
+Estas no son decisiones abiertas — son requisitos no negociables que deben
+respetarse al escribir `groq-enrichment.mjs`:
+
+1. **Lazy import + guardedWrite, igual que `spip-client.mjs`.**
+   `server.mjs` importa `groq-enrichment.mjs` de forma dinámica
+   (`await import(...)`) solo cuando va a llamar a Groq, no en el arranque
+   del módulo. Esto garantiza que `--validate-only` y los tests sigan
+   funcionando sin `GROQ_API_KEY` en el entorno — el mismo motivo por el
+   que `spip-client.mjs` usa lazy import hoy. Toda llamada a la API Groq
+   debe pasar por `guardedWrite()` de `live-write-gateway.mjs` para que
+   quede registrada en el audit log.
+
+2. **Timeout + un reintento alrededor de la llamada Groq.**
+   Una llamada LLM que cuelgue 30 s dentro de un route handler de Express
+   bloquea el único proceso Node para todos los demás usuarios del dashboard.
+   La llamada debe tener un `AbortSignal` con timeout (recomendado: 20 s) y
+   un único reintento automático antes de reportar fallo. Si ambos intentos
+   fallan, se aplica la decisión #2: preguntar al usuario si desea continuar
+   con el contenido sin estructurar.
+
+3. **La salida de Groq pasa por `validateHtml()` igual que el input humano.**
+   No tratar el output de la IA como "confiable". El artefacto `[cite: N]`
+   que ya detecta `article-validator.mjs` existe precisamente porque un
+   asistente de escritura generó ese patrón una vez y llegó a publicarse.
+   Groq producirá el mismo tipo de artefactos si su salida no se valida.
+   `contentHtml` generado por Groq debe pasar por el mismo gate de
+   `analyzeHtml()` que el HTML escrito a mano — y por el parser real
+   (`node-html-parser` / `parse5`) en cuanto esté implementado (ver
+   `docs/RISKS.md` §3).
+
+4. **Seams inyectables desde el día uno.**
+   `groq-enrichment.mjs` debe aceptar un parámetro `_groqClient` (o
+   equivalente) para tests, igual que `publish-use-case.mjs` acepta
+   `_spipClient`. No añadir seams después de que los tests revelen la
+   necesidad — documentado como antipatrón en `docs/RISKS.md` §6.
+
 ### Entregable de cierre
 
 Un artículo pegado como texto plano en el editor llega a Terminado con todos
