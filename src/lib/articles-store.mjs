@@ -335,11 +335,25 @@ export function sendToRevision(id) {
 
 /**
  * Carga un artículo completo por su id (campo `id` del JSON).
- * Devuelve el objeto parseado o null si no existe.
+ * Busca primero en articles/, luego en articles/archive/.
+ * Devuelve el objeto parseado o null si no existe en ninguno de los dos.
  */
 export function loadArticle(id) {
   const found = findArticleById(id);
-  return found ? found.article : null;
+  if (found) return found.article;
+
+  // Fallback: search in archive/
+  if (fs.existsSync(ARCHIVE_DIR)) {
+    const files = fs.readdirSync(ARCHIVE_DIR).filter((f) => f.endsWith('.json'));
+    for (const filename of files) {
+      const filepath = path.join(ARCHIVE_DIR, filename);
+      const article = readArticleFile(filepath);
+      if (!article) continue;
+      const jsonId = article.id ?? filename.replace('.json', '');
+      if (jsonId === id) return article;
+    }
+  }
+  return null;
 }
 
 /**

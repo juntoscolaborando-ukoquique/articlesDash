@@ -377,14 +377,20 @@ export function renderArchiveTable(data, { highlightId, spipId } = {}) {
     const tr = document.createElement('tr');
     tr.dataset.id = article.id;
 
-    // Title (read-only — archived articles can't be edited from the dashboard)
+    // Title — click opens the read-only detail view
     const tdTitle = document.createElement('td');
     tdTitle.className = 'col-title';
-    const titleEl = document.createElement('span');
+    const titleEl = document.createElement('button');
     titleEl.className = 'article-title-link';
     titleEl.style.color = 'var(--muted)';
+    titleEl.title = 'Ver detalle';
     titleEl.textContent = article.title || '(sin título)';
+    titleEl.addEventListener('click', () => openDetail(article.id));
     tdTitle.appendChild(titleEl);
+    const hint = document.createElement('div');
+    hint.className = 'title-hint';
+    hint.textContent = 'Ver detalle →';
+    tdTitle.appendChild(hint);
     if (article.descriptif) {
       const descDiv = document.createElement('div');
       descDiv.className = 'article-descriptif';
