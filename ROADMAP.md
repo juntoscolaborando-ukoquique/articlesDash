@@ -521,6 +521,63 @@ necesidad de tocar `/ecrire/` manualmente.
 
 ---
 
+## Etapa 5 — Preparación para uso móvil (trust boundaries)
+
+**Empieza cuando:** Etapa 4 (Groq) esté cerrada y el flujo editorial sea
+estable en producción desde el desktop.
+
+La arquitectura actual (Express + JSON REST + funciones de use-case puras)
+tiene exactamente la forma correcta para un backend móvil. Lo que falta es
+todo lo que rodea los límites de confianza, porque este sistema fue
+construido como "una persona, un portátil, localhost":
+
+### Lo que hay que resolver antes de exponer el servidor a una red
+
+1. **Autenticación.** Un app móvil implica un servidor alcanzable por red.
+   Como mínimo: un token API compartido en un header (`Authorization:
+   Bearer <token>`, chequeado en `asyncHandler` o en un middleware previo),
+   con el token en `.env`. No publicar el servidor en ninguna red sin esto.
+
+2. **Binding explícito de host.**
+   `app.listen(PORT)` sin argumento de host vincula a todas las interfaces.
+   Mientras no haya auth: bind explícito a `127.0.0.1`. Una vez que haya
+   auth: bind a `0.0.0.0` deliberadamente, detrás de lo que se elija.
+
+3. **CORS.**
+   Hoy no hay middleware `cors` — es irrelevante porque el frontend se sirve
+   desde el mismo origen. Un app móvil hablando a este servidor como API
+   necesita CORS configurado explícitamente, con orígenes permitidos
+   declarados, no permisivo por defecto.
+
+4. **Upgrade del publish lock.**
+   El Set en memoria `publishingInProgress` no sobrevive a una segunda
+   instancia del servidor. Si "app móvil" implica alguna vez "servidor
+   corriendo en algún lugar alcanzable 24/7, posiblemente reiniciado o
+   escalado", este punto necesita el upgrade a Redis-lock ya esbozado en
+   Etapa 2 de este roadmap.
+
+5. **Rate limiting en `/api/site/*`.**
+   Esos endpoints pueden borrar permanentemente artículos del sitio en vivo.
+   Un teléfono perdido, robado, o corriendo una build con un bug es un
+   modelo de amenaza completamente diferente a "el único portátil que tengo
+   bajo control físico". Añadir rate limiting (p.ej. `express-rate-limit`)
+   en las rutas de borrado y publicación antes de cualquier despliegue móvil.
+
+### Lo que NO hay que cambiar
+
+La estructura de rutas, el formato JSON de la API, los use-case functions,
+el schema de artículos — todo esto ya tiene la forma correcta. Este etapa
+es exclusivamente infraestructura de seguridad alrededor de lo que ya existe,
+no rediseño.
+
+### Entregable de cierre
+
+El servidor puede exponerse a una red (y por tanto a un app móvil) con un
+modelo de amenaza documentado y mitigaciones activas para cada punto de la
+lista anterior.
+
+---
+
 ## Lo que no está en este roadmap (fuera de alcance por ahora)
 
 - Autenticación multiusuario
