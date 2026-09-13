@@ -258,9 +258,9 @@ ahora. Ya existen:
 
 - Editor real de campos (surtitre, soustitre, chapo, ps, topics, coverImage) —
   hoy Edición solo cubre título + cuerpo en texto plano.
-  → Ver **[IMPROVE_STEPS.md](../IMPROVE_STEPS.md)** para el plan detallado:
-  splitter heurístico + formulario editable en En Progreso, diseñado para que
-  Groq (Etapa 4) se enchufe en el mismo punto sin tocar la UI.
+  → El plan detallado estuvo en **docs/IMPROVE_STEPS.md** (implementado y eliminado en v1.16.0 — ver CHANGELOG 1.9.0).
+  El splitter heurístico + formulario editable en En Progreso ya están en código;
+  diseñado para que Groq (Etapa 4) se enchufe en el mismo punto sin tocar la UI.
 - Rich-text (Tiptap) en vez de textarea plano, si se decide que hace falta
   para el contenido real que se está publicando.
 - Sanitización explícita (DOMPurify o equivalente) antes de que el HTML
@@ -338,7 +338,7 @@ caller (use case o handler) decide si escribir el resultado o mostrarlo
 como sugerencia al usuario.
 
 > **Nota de integración:** `enrichDraft()` reemplaza a `splitContentIntoFields()`
-> de `field-splitter.mjs` (ver [IMPROVE_STEPS.md](../IMPROVE_STEPS.md) Paso 7)
+> de `field-splitter.mjs` (ver docs/IMPROVE_STEPS.md Paso 7 — implementado, archivo eliminado en v1.16.0)
 > en el mismo punto de `POST /api/articles/:id/send-to-revision` — devuelve la
 > misma forma `{ chapo, contentHtml, ps, guessed }`, sin cambios en la UI ni en
 > el endpoint de campos.

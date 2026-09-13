@@ -59,16 +59,30 @@ articulos-READY/
 │   └── example-article.json   ← artículo de ejemplo completo (nunca se publica)
 │
 ├── src/
-│   ├── server.mjs             ← servidor Express (dashboard backend)
-│   ├── publish-article.mjs    ← adaptador CLI (punto de entrada terminal)
-│   ├── probe-rubriques.mjs    ← Fase D0: verifica rubriques contra el sitio vivo
-│   └── lib/
-│       ├── publish-use-case.mjs   ← orquestación pura del flujo de publicación
-│       ├── articles-store.mjs     ← I/O de archivos JSON de artículos
-│       ├── article-validator.mjs  ← valida el JSON contra el schema
-│       ├── spip-client.mjs        ← rellena el formulario SPIP (Playwright)
-│       ├── spip-session.mjs       ← login a kilombo.top + helper withSpipSession
-│       └── live-write-gateway.mjs ← chokepoint de auditoría para escrituras
+│   ├── server.mjs                     ← servidor Express (dashboard backend)
+│   ├── publish-article.mjs            ← adaptador CLI (punto de entrada terminal)
+│   ├── manage-article-status.mjs      ← cambia estado de artículos en SPIP (CLI)
+│   ├── permanently-delete-article.mjs ← borrado permanente de artículos SPIP (CLI)
+│   ├── probe-rubriques.mjs            ← Fase D0: verifica rubriques contra el sitio vivo
+│   ├── lib/
+│   │   ├── publish-use-case.mjs   ← orquestación pura del flujo de publicación
+│   │   ├── articles-store.mjs     ← I/O de archivos JSON de artículos
+│   │   ├── article-validator.mjs  ← valida el JSON contra el schema
+│   │   ├── field-splitter.mjs     ← separa campos en la transición Edición → En Progreso
+│   │   ├── text-to-html.mjs       ← conversión texto plano ↔ HTML restringido
+│   │   ├── spip-client.mjs        ← rellena el formulario SPIP (Playwright)
+│   │   ├── spip-session.mjs       ← login a kilombo.top + helper withSpipSession
+│   │   ├── spip-admin.mjs         ← operaciones admin SPIP (cambio estado, borrado)
+│   │   └── live-write-gateway.mjs ← chokepoint de auditoría para escrituras
+│   └── scripts/                   ← utilidades de diagnóstico y mantenimiento
+│       ├── extract-spip-article.mjs         ← vuelca campos de un artículo SPIP por ID
+│       ├── search-spip-articles.mjs         ← busca artículos en SPIP por nombre/texto
+│       ├── archive-published-articles.mjs   ← archiva artículos ya publicados del dashboard
+│       ├── find-duplicate-spip-articles.mjs ← detecta duplicados en SPIP vía audit log
+│       ├── update-article-fields.mjs        ← actualiza campos en artículos SPIP existentes
+│       ├── update-spip-subtitle.mjs         ← actualiza subtítulo de un artículo SPIP
+│       ├── analyze-subtitle-issues.mjs      ← detecta problemas de formato en subtítulos
+│       └── … (otros scripts de diagnóstico en src/scripts/)
 │
 ├── public/
 │   ├── index.html             ← dashboard web (frontend)
@@ -96,7 +110,6 @@ articulos-READY/
 ├── docs/
 │   ├── SCHEMA.md               ← especificación completa del formato JSON
 │   ├── ARTICLE-DESIGN.md       ← qué aspectos del diseño controla el pipeline
-│   ├── IMPROVE_STEPS.md        ← splitter heurístico + editor de campos (histórico)
 │   ├── PUBLISHING.md           ← guía operativa de publicación
 │   └── RISKS.md                ← riesgos conocidos del pipeline
 │

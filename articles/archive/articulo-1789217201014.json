@@ -1,0 +1,29 @@
+{
+  "_schema_version": "1.0",
+  "id": "articulo-1789217201014",
+  "language": "ES",
+  "section": "nom",
+  "title": "Argentina, ¿laboratorio de Palantir?",
+  "soustitre": "El desembarco de Peter Thiel y la geopolítica de los datos en el Cono Sur",
+  "descriptif": "Análisis del interés estratégico de Peter Thiel y Palantir Technologies en Argentina: acceso a recursos energéticos, extracción de datos estatales y afinidad ideológica con el gobierno de Milei.",
+  "chapo": "<p>El cofundador de PayPal y creador de Palantir Technologies, Peter Thiel, adquirió una residencia en Buenos Aires y entabló reuniones con el gobierno de Javier Milei. Un informe de Canal Red reconstruye una década de movimientos silenciosos de la firma de vigilancia masiva en Argentina y traza las implicancias geopolíticas de este desembarco.</p>",
+  "contentHtml": "<h3>Antecedentes: un interés de casi una década</h3>\n<p>A diferencia de la narrativa oficial que presenta la llegada de Thiel como consecuencia directa del gobierno libertario, la investigación periodística publicada en la revista <em>Amfibia</em> revela que los movimientos de Palantir en Argentina comenzaron mucho antes:</p>\n<ul>\n<li><strong>2017 — El intento por la causa AMIA:</strong> En su primera incursión en Buenos Aires, Palantir intentó acceder a los archivos e información clasificada del atentado a la AMIA de 1994, buscando procesar los datos más sensibles de la historia democrática argentina.</li>\n<li><strong>2022 — Registro de la empresa:</strong> Palantir Technologies fue inscrita ante el Instituto Nacional de la Propiedad Industrial (INPI), ofreciendo licencias de software de inteligencia artificial perimetral, seguimiento cartográfico, marcado social y procesamiento masivo de datos orientado a la seguridad nacional.</li>\n<li><strong>2025-2026 — Consolidación estratégica:</strong> Thiel compró una propiedad por 12 millones de dólares en el exclusivo Barrio Parque de Buenos Aires e inició reuniones privadas y oficiales en la Casa Rosada con Milei y asesores clave como Santiago Caputo.</li>\n</ul>\n<h3>Los tres pilares del interés estratégico</h3>\n<p>El informe desglosa las hipótesis sobre qué busca una figura con una fortuna estimada en 32.000 millones de dólares en el Cono Sur:</p>\n<h4>Recursos y energía para la infraestructura de IA</h4>\n<p>La inteligencia artificial de frontera exige un volumen masivo de energía y agua para abastecer los data centers. A través del vehículo financiero Thiel Macro LLC, el magnate adquirió aproximadamente el 1% de las acciones de Vista Energy —operación cercana a los 76 millones de dólares—, posicionándose directamente en el yacimiento de hidrocarburos no convencionales de Vaca Muerta para asegurar respaldo energético a bajo costo.</p>\n<h4>Flexibilización normativa y extracción de datos</h4>\n<p>El marco legal impulsado por el Poder Ejecutivo —incluyendo regímenes como el RIGI— facilita beneficios impositivos y regulatorios a largo plazo para inversiones en centros de datos. Esto se complementa con convenios sobre integración de bases de datos estatales y la creación de unidades de inteligencia artificial aplicadas a la seguridad ciudadana.</p>\n<h4>Afinidad ideológica y «refugio escatológico»</h4>\n<p>Thiel es referente del movimiento tecno-libertario que rechaza el modelo democrático tradicional —habiendo afirmado públicamente que «libertad y democracia ya no son compatibles»—. Ante escenarios de colapso sistémico, Sudamérica se perfila en la visión de estos magnates como un espacio geográficamente distante de los principales conflictos bélicos del hemisferio norte.</p>\n<h3>Resistencia social y debate político</h3>\n<p>El desembarco no ha estado exento de tensiones:</p>\n<ul>\n<li><strong>Protestas («Les Gandalfs del Sur»):</strong> Manifestantes acudieron a las puertas de su residencia en Barrio Parque emulando personajes del <em>Señor de los Anillos</em> —un guiño satírico, dado que tanto Palantir como otras firmas de Thiel toman sus nombres de la obra de Tolkien— para denunciar los peligros de la vigilancia masiva.</li>\n<li><strong>Audiencias en el Congreso:</strong> Diputados de la oposición impulsaron audiencias públicas junto a académicos y organizaciones de derechos digitales para cuestionar el destino de las bases de datos biométricos y personales del Estado nacional.</li>\n<li><strong>Gira regional:</strong> Se reportaron encuentros similares con mandatarios de países limítrofes, consolidando una agenda de inserción tecnológica en todo el Cono Sur.</li>\n</ul>\n<h3>Contexto geopolítico: la disputa global por la IA</h3>\n<p>El informe sitúa este caso dentro de la disputa entre Estados Unidos y China por el dominio de la Inteligencia Artificial. Mientras China expande modelos de código abierto a menor costo para el Sur Global a través de programas como AI Plus, las corporaciones estadounidenses buscan garantizar el control soberano sobre la infraestructura de datos y recursos naturales en América Latina para mantener la hegemonía tecnológica.</p>",
+  "ps": "<p>Fuente: <a href=\"https://www.youtube.com/watch?v=ksm9mRScGMU\">La Base América Latina — Canal Red: «Argentina, ¿laboratorio de Palantir?»</a> (septiembre de 2026). Análisis basado en investigación de revista <em>Amfibia</em>.</p>",
+  "author": "Canal Red / La Base América Latina",
+  "sourceSite": "Canal Red",
+  "sourceUrl": "https://www.youtube.com/watch?v=ksm9mRScGMU",
+  "sourceDate": "2026-09-12",
+  "date": "2026-09-12",
+  "topics": [
+    "palantir",
+    "argentina",
+    "vigilancia",
+    "inteligencia-artificial",
+    "geopolitica"
+  ],
+  "status": "prepa",
+  "workflowStatus": "terminado",
+  "spipArticleId": "135",
+  "publishedAt": "2026-09-12T14:03:56.432Z",
+  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=135"
+}

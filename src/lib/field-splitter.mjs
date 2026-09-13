@@ -7,7 +7,7 @@
  * metadata (sourceUrl, sourceSite, author, sourceDate) detectadas por
  * patrón en el propio texto.
  *
- * Ver docs/IMPROVE_STEPS.md — Paso 1. Puro, sin DOM ni Express: solo texto
+ * Ver docs/IMPROVE_STEPS.md (eliminado en v1.16.0 — implementado, ver CHANGELOG 1.9.0) — Paso 1.
  * adentro, objeto afuera. Nunca lanza — si el input no matchea nada, lo
  * devuelve intacto.
  *

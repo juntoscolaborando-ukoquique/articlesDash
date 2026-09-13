@@ -225,7 +225,7 @@ export function renderDetail(article, { isArchived = false } = {}) {
 // (src/lib/field-splitter.mjs) al entrar a En Progreso: chapo / contenido /
 // ps / topics / metadata de fuente. Reemplaza la vista de solo-lectura
 // (renderDetail) únicamente para artículos en workflowStatus 'en-progreso'.
-// Ver docs/IMPROVE_STEPS.md — Paso 4.
+// Ver docs/IMPROVE_STEPS.md — Paso 4 (implementado; archivo eliminado en v1.16.0).
 
 export async function openFieldsEditor(id) {
   showDetailViewLoading();

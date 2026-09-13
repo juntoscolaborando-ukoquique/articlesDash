@@ -87,7 +87,7 @@ Solo uno de ellos (típicamente el más reciente) debería existir.
 #### Paso 1: Scan local (rápido)
 
 ```bash
-npm run audit -- --report
+Dashboard → Sitio → panel "Audit log" (GET /api/site/audit-report)
 ```
 
 Busca en `live-write-audit.log.jsonl`:
@@ -230,7 +230,7 @@ Gate de confirmación automático para `publie`.
 Escenario: articulo-X se publicó dos veces. Necesitas dejar solo la versión más reciente en SPIP.
 
 ```
-1. npm run audit -- --report
+1. Dashboard → Sitio → panel "Audit log" (GET /api/site/audit-report)
    ✓ Confirma: articulo-X tiene IDs #234 y #235
 
 2. Dashboard → Sitio → "Verificar en SPIP"
@@ -251,7 +251,7 @@ Escenario: articulo-X se publicó dos veces. Necesitas dejar solo la versión m�
 6. Dashboard → Sitio → "Verificar en SPIP"
    ✓ Resultado: "Solo #235 (canónico) sigue vivo"
 
-7. npm run audit -- --report
+7. Dashboard → Sitio → panel "Audit log" (GET /api/site/audit-report)
    ✓ Confirma: articulo-X ahora tiene 1 solo SPIP ID (#235)
 ```
 
@@ -261,7 +261,7 @@ Escenario: articulo-X se publicó dos veces. Necesitas dejar solo la versión m�
 
 ### Rápidas (< 1 segundo)
 
-- `npm run audit -- --report` (lee archivo local JSON)
+- Dashboard → **Sitio** → panel "Audit log" (o `GET /api/site/audit-report`) (lee archivo local JSON)
 - Dashboard → Sitio → audit panel (lee audit log)
 - Dashboard → Sitio → "Buscar duplicados locales" (compara títulos en memoria)
 
@@ -520,7 +520,7 @@ node src/scripts/archive-published-articles.mjs
 node src/scripts/search-spip-articles.mjs "<término>"   # buscar por nombre/texto
 
 # Lectura
-npm run audit -- --report                      # Scan local de duplicados
+Dashboard → Sitio → panel "Audit log" (GET /api/site/audit-report)                      # Scan local de duplicados
 npm run status -- --inspect --id <id>          # Ver estado actual de un artículo
 node src/scripts/extract-spip-article.mjs <id> # Volcar todos los campos del artículo
 
@@ -548,6 +548,6 @@ npm run dashboard    # Inicia en http://localhost:3000
 ## 15. Contacto y reportes
 
 Si encuentras inconsistencias entre el audit log y SPIP real:
-1. Ejecuta `npm run audit -- --report` (snapshot local)
+1. Ejecuta Dashboard → **Sitio** → panel "Audit log" (o `GET /api/site/audit-report`) (snapshot local)
 2. Ejecuta dashboard → Sitio → "Verificar en SPIP" (snapshot remoto)
 3. Reporta si los dos divergen (posible bug en reconciliación)

@@ -1,6 +1,6 @@
 {
   "name": "articulos-ready",
-  "version": "1.16.0",
+  "version": "1.19.0",
   "description": "Publica artículos completos en www.kilombo.top (SPIP 4.4), dejándolos en estado 'en preparación' para revisión humana.",
   "type": "module",
   "scripts": {

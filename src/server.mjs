@@ -260,7 +260,7 @@ app.post('/api/articles/:id/send-to-revision', asyncHandler('POST /api/articles/
     });
   }
 
-  // Splitter heurístico (docs/IMPROVE_STEPS.md, Paso 2): corre una sola vez,
+  // Splitter heurístico (docs/IMPROVE_STEPS.md, Paso 2 — implementado, archivo eliminado en v1.16.0): corre una sola vez,
   // acá, en la transición — no en cada lectura. Nunca pisa un campo que el
   // artículo ya tenga (p.ej. tras un demote + edición manual previa): el
   // splitter solo llena huecos, la corrección humana previa siempre gana.

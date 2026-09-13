@@ -1,0 +1,21 @@
+{
+  "_schema_version": "1.0",
+  "id": "articulo-1789268455073",
+  "language": "ES",
+  "section": "nom",
+  "title": "Lay it on me, lay it on me",
+  "descriptif": "Enlace al video musical de referencia.",
+  "contentHtml": "<p><strong>Referencia audiovisual</strong></p>\n<p>Este artículo recoge el enlace del video musical correspondiente a la pieza <em>Lay it on me, lay it on me</em>.</p>\n<p>https://www.youtube.com/watch?v=4KZDg6ZHHBE</p>",
+  "date": "2026-09-13",
+  "topics": [
+    "musica",
+    "cultura"
+  ],
+  "status": "prepa",
+  "workflowStatus": "terminado",
+  "chapo": "<p>Enlace de referencia para la pieza musical.</p>",
+  "ps": "",
+  "spipArticleId": "142",
+  "publishedAt": "2026-09-13T03:09:38.185Z",
+  "publishedUrl": "https://www.kilombo.top/ecrire/?exec=article&id_article=142"
+}

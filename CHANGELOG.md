@@ -5,6 +5,32 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [1.18.0] — 2026-09-13
+
+### Archivo — artículos abribles en vista de detalle
+
+- Los títulos en la pestaña Archivo son ahora botones clicables que abren la vista de detalle de solo lectura, igual que en Terminado.
+- `loadArticle()` en `articles-store.mjs` ahora busca también en `articles/archive/` como fallback, por lo que `GET /api/articles/:id` resuelve artículos archivados sin necesidad de un endpoint nuevo.
+- Se añade el hint "Ver detalle →" bajo el título, coherente con las otras pestañas.
+
+**Archivos modificados:** `public/js/list-view.js`, `src/lib/articles-store.mjs`
+
+---
+
+## [1.17.0] — 2026-09-13
+
+### Dashboard — mejoras de visibilidad post-publicación y robustez de Terminado
+
+- **Banner persistente en Archivo tras publicar:** al hacer clic en "Publicar en SPIP", el dashboard ahora cambia al tab Archivo y muestra un banner verde permanente: _"✅ Publicado en SPIP como ID #NNN y movido al archivo."_ El banner permanece visible hasta que el usuario navegue a otra pestaña, eliminando la dependencia del toast efímero de 7 s.
+- **Validación inmediata al guardar en Terminado:** `PUT /api/articles/:id/fields` ahora re-valida el artículo tras el guardado. Si el artículo estaba en Terminado y el cambio rompe una regla de validación, la respuesta incluye `{ nowInvalid, validationErrors }` y el frontend muestra un toast de error de 10 s con los errores exactos, antes de que el self-heal lo mueva silenciosamente a En Progreso.
+- **`setActiveTab` acepta `{ autoLoad }`** para evitar doble llamada a `loadArchive` cuando el caller ya la gestiona.
+- **`loadArchive` y `renderArchiveTable` aceptan `{ highlightId, spipId }`** para activar el banner.
+- **CSS:** `.archive-publish-banner` (fila verde con borde izquierdo) añadido a `public/index.html`.
+
+**Archivos modificados:** `public/js/api.js`, `public/js/list-view.js`, `public/js/detail-view.js`, `public/index.html`, `src/server.mjs`
+
+---
+
 ## [1.16.0] — 2026-09-12
 
 ### Dashboard — corrección de flujo post-publicación
@@ -447,7 +473,7 @@ estructural.
 
 ## [1.5.0] — 2026-09-09
 
-### Añadido — Splitter heurístico + editor de campos (Etapa 3, IMPROVE_STEPS.md)
+### Añadido — Splitter heurístico + editor de campos (Etapa 3, docs/IMPROVE_STEPS.md — eliminado en v1.16.0)
 
 - `src/lib/field-splitter.mjs` — módulo puro nuevo. `splitContentIntoFields(contentHtml)`
   parte el bloque único de `textToParagraphHtml()` en `chapo` / `contentHtml` / `ps`,
@@ -514,7 +540,7 @@ estructural.
 ### Docs / infraestructura
 
 - `docs/PUBLISHING.md` — movido desde la raíz a `docs/` (finalizado el `git mv`).
-- `IMPROVE_STEPS.md` + `docs/RISKS.md` — añadidos al repositorio (estaban sin trackear).
+- `docs/IMPROVE_STEPS.md` + `docs/RISKS.md` — añadidos al repositorio (estaban sin trackear). (Nota: IMPROVE_STEPS.md fue eliminado en v1.16.0 una vez completada su implementación.)
 
 ---
 
