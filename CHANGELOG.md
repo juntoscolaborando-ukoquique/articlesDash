@@ -44,6 +44,85 @@ Implementa el diseño de `IMPLEMENTATION-ANALYSIS.md` §2 (Etapa 3 del ROADMAP).
 
 ---
 
+## [1.21.0] — 2026-09-13
+
+### Etapa 4 prerequisite — parser real en lugar de regex (RISKS.md #3)
+
+Reemplaza el analizador de HTML basado en regex de `article-validator.mjs`
+por `parse5` (el parser HTML5 spec-compliant que también usa jsdom). Este
+era el único riesgo de `docs/RISKS.md` marcado como bloqueante para Etapa 4.
+
+- **`analyzeHtml()` reescrita** para recorrer el árbol real que produce
+  `parse5.parseFragment()` en vez de escanear la cadena con una regex de
+  una sola pasada. Misma firma de salida (`tags`, `forbiddenAttrs`,
+  `missingAlts`), más un nuevo campo `parseErrors`.
+- **Dos bugs reales de la regex corregidos por construcción:**
+  - un valor de atributo entre comillas que contiene `>` (p.ej.
+    `href="foo>bar"`) cortaba el tag a la mitad;
+  - un tag falso dentro de un comentario HTML (`<!-- <div>...</div> -->`)
+    podía ser tratado como markup real.
+- **Nuevo:** `validateHtml()` ahora también reporta los `onParseError` de
+  parse5 (caracteres inválidos en nombres de tag/atributo) como error de
+  validación — señal de HTML genuinamente roto que la regex no podía ver.
+- **Deliberadamente NO es un error:** un `<p>` sin cerrar o un `</div>`
+  sin apertura correspondiente. El spec HTML5 los resuelve implícitamente
+  (igual que un navegador o SPIP lo harían) — no son "parse errors" del
+  spec, y tratarlos como error rechazaría contenido que el spec mismo
+  considera válido.
+- **Validado contra contenido real** antes de mergear: las 85 instancias
+  de `contentHtml`/`chapo`/`ps` ya existentes en `articles/*.json` (activos
+  y archivados) pasaron por el nuevo analizador sin ningún falso positivo.
+- **Tests:** 4 casos nuevos en `test/article-validator.test.mjs` —
+  regresión de los dos bugs corregidos, detección de sintaxis inválida, y
+  confirmación explícita de que un `<ul>/<li>` sin cerrar sigue siendo
+  válido.
+
+**Dependencia nueva:** `parse5@^7.3.0`.
+**Archivos modificados:** `src/lib/article-validator.mjs`, `package.json`,
+`package-lock.json`, `test/article-validator.test.mjs`, `docs/RISKS.md`,
+`ROADMAP.md`.
+
+---
+
+## [1.20.0] — 2026-09-13
+
+### Etapa 3 — detección y borrado de duplicados locales
+
+Implementa el diseño de `IMPLEMENTATION-ANALYSIS.md` §2 (Etapa 3 del ROADMAP).
+
+- **`src/lib/text-utils.mjs` (nuevo):** `normalizeTitle()` — minúsculas, sin
+  acentos, sin puntuación, espacios colapsados. Pura, sin acceso a fs.
+- **`findDuplicateGroups()` en `articles-store.mjs`:** agrupa artículos
+  activos (nunca `archive/`) por título normalizado. Cada grupo trae
+  `modifiedAtMs` (mtime del archivo), `fileSize` y `wordCount` por copia,
+  ordenado del más reciente al más viejo — la UI sugiere conservar el
+  primero. Grupos ordenados por cantidad de copias.
+- **`deleteArticleFile()` en `articles-store.mjs`:** borra el archivo local
+  de un artículo. Sin gate propio — las reglas de negocio viven en
+  `server.mjs`, mismo patrón que `promoteToTerminado()`/`validateArticle`.
+- **`GET /api/articles/duplicates`** (nuevo, declarado antes de
+  `GET /api/articles/:id`, mismo motivo que `/api/articles/archive`).
+  `'duplicates'` añadido a `RESERVED_SLUGS`.
+- **`DELETE /api/articles/:id`** (nuevo): borra un borrador local. Rechaza
+  con 409 si el artículo ya tiene `spipArticleId` o si no está en
+  `edicion`/`en-progreso` — un artículo Terminado o publicado se retira
+  desde Sitio, no por acá. Nunca toca `articles/archive/` ni SPIP.
+- **`public/js/duplicates.js` (nuevo):** UI en la pestaña Sitio — botón
+  "Buscar duplicados", radio por copia para elegir cuál conservar, botón
+  "Borrar no seleccionados" con `confirm()` explícito (mismo patrón que
+  `site-admin.js`).
+- **Tests:** `test/text-utils.test.mjs` (7 casos) + 8 casos nuevos en
+  `test/server.test.mjs` para ambos endpoints, incluyendo que
+  `archive/` nunca contribuye a un grupo de duplicados.
+
+**Archivos nuevos:** `src/lib/text-utils.mjs`, `public/js/duplicates.js`,
+`test/text-utils.test.mjs`.
+**Archivos modificados:** `src/lib/articles-store.mjs`, `src/server.mjs`,
+`public/js/dom.js`, `public/js/main.js`, `public/index.html`,
+`test/server.test.mjs`, `test/check-dom-ids.sh`.
+
+---
+
 ## [1.18.0] — 2026-09-13
 
 ### Archivo — artículos abribles en vista de detalle

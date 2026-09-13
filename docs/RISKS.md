@@ -4,7 +4,7 @@
 
 The risks below are ordered by when they become blocking constraints:
 
-- **Etapa 4 (now):** #3 — Groq will generate HTML, so the validator must be able to catch bad output reliably.
+- **Etapa 4 (now):** ~~#3~~ resolved (see below) — Groq will generate HTML; the validator can now catch bad output reliably.
 - **Before mobile/multi-user:** #1 and #4 — authentication and the single-process lock must be solved before the server is exposed to more than one user or instance.
 - **Ongoing / background:** #2 — browser automation fragility is a permanent maintenance cost; no single fix, mitigated incrementally.
 - **Not blocking Etapa 4:** #5, #6 — remain real risks but don't interact with the Groq pipeline directly.
@@ -29,12 +29,27 @@ No authentication on the Express server (`server.mjs`) despite exposing endpoint
 
 ---
 
-## #3 — Regex-based HTML validation
-**Priority: solve during Etapa 4**
+## #3 — ~~Regex-based HTML validation~~ ✅ Resuelto (v1.21.0, 2026-09-13)
+**Priority: solved during Etapa 3, ahead of Etapa 4**
 
-`article-validator.mjs`'s `analyzeHtml` is explicitly acknowledged as "not a full parser" — fine as a best-effort gate when a human hand-types HTML, but will miss malformed or unexpectedly nested markup once Groq is generating `contentHtml` programmatically.
+`article-validator.mjs`'s `analyzeHtml` now parses with `parse5` (the
+spec-compliant HTML5 parser also used by jsdom) instead of a hand-rolled
+regex. Fixed two concrete bugs the regex had by construction — a quoted
+attribute value containing `>` (e.g. `href="foo>bar"`) used to cut the tag
+match short; a fake tag inside an HTML comment could be picked up as real
+markup — and `analyzeHtml` now also surfaces parse5's own `onParseError`
+codes as a validation error, catching genuinely malformed syntax (bad
+characters in tag/attribute names) that the regex had no way to see.
 
-> **Etapa 4 note:** This is the one risk that becomes directly relevant during Etapa 4. Before shipping `groq-enrichment.mjs` to production, replace the regex analyzer with a real parser (`node-html-parser` or `parse5`) so that Groq's output is validated against the allowed-tag schema with the same rigour as hand-authored content. A malformed `<ul>` or unclosed tag from a Groq response should be caught here, not silently passed to SPIP.
+Deliberately **not** treated as an error: an unclosed `<p>` or a stray
+`</div>` with no matching open tag. The HTML5 parsing spec itself is
+forgiving of these — a browser (and SPIP) resolve them implicitly, so
+flagging them would reject content the spec itself considers valid. Verified
+against all 85 real `contentHtml`/`chapo`/`ps` fields already on disk before
+merging: zero false positives.
+
+See CHANGELOG 1.21.0 and `test/article-validator.test.mjs` for the
+regression tests covering both fixed bugs.
 
 ---
 

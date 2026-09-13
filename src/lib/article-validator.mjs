@@ -10,6 +10,8 @@
  *   if (errors.length > 0) { ... }
  */
 
+import { parseFragment } from 'parse5';
+
 // ── Valores permitidos ────────────────────────────────────────────────────────
 
 const VALID_SECTIONS = ['general', 'tierra', 'gci', 'pi', 'nom', 'nomfr', 'actualidad'];
@@ -39,43 +41,63 @@ const FORBIDDEN_TAGS = new Set(['div', 'span', 'script', 'style', 'iframe', 'obj
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Extrae todos los tags y atributos del HTML usando regex ligero.
- * No pretende ser un parser completo — cubre los errores más comunes.
+ * Extrae todos los tags, atributos y errores de sintaxis del HTML usando
+ * parse5 — el parser HTML5 spec-compliant que también usa jsdom.
+ *
+ * Reemplaza la versión anterior basada en regex (ver docs/RISKS.md #3 y
+ * CHANGELOG 1.21.0). La regex tenía bugs reales que un parser evita solo
+ * por construcción:
+ *   - un valor de atributo entre comillas que contiene '>' (p.ej.
+ *     `href="foo>bar"`) cortaba el tag a la mitad y dejaba el resto como
+ *     texto suelto, que la regex podía re-interpretar como otro tag falso.
+ *   - texto dentro de comentarios (`<!-- <div>...</div> -->`) o de
+ *     elementos "raw text" (`<script>`, `<style>`) podía matchear como
+ *     tags reales — un parser real sabe que ese contenido no es markup.
+ * Además, parse5 expone los errores de sintaxis reales del spec WHATWG
+ * (caracteres inválidos en nombres de tag/atributo, etc.) vía
+ * `onParseError` — señal de basura/inyección que la regex no podía ver.
+ *
+ * Nota deliberada: el parsing HTML5 es forgiving por diseño (un `<p>` sin
+ * cerrar o un `</div>` sin apertura correspondiente NO son "parse errors"
+ * para el spec — el navegador los resuelve implícitamente, y SPIP hará lo
+ * mismo). Por eso esto no intenta detectar "tags sin cerrar" como error:
+ * seguimos validando la lista de tags/atributos que el HTML *producirá*
+ * una vez interpretado — igual que antes, pero calculada correctamente en
+ * vez de con una regex de una sola pasada.
  *
  * @param {string} html
- * @returns {{ tags: string[], forbiddenAttrs: string[], missingAlts: boolean }}
+ * @returns {{ tags: string[], forbiddenAttrs: string[], missingAlts: boolean, parseErrors: string[] }}
  */
 function analyzeHtml(html) {
   const tags = [];
   const forbiddenAttrs = [];
+  const parseErrors = [];
   let missingAlts = false;
 
-  // Extraer tags de apertura: <tagname attr1 attr2>
-  const tagRegex = /<([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^>]*)?)\s*\/?>/g;
-  let match;
+  const fragment = parseFragment(html, {
+    onParseError: (err) => parseErrors.push(err.code),
+  });
 
-  while ((match = tagRegex.exec(html)) !== null) {
-    const tagName = match[1].toLowerCase();
-    const attrsStr = match[2] || '';
-    tags.push(tagName);
+  (function walk(node) {
+    if (node.tagName) {
+      const tagName = node.tagName.toLowerCase();
+      tags.push(tagName);
 
-    // Detectar atributos prohibidos
-    const attrNameRegex = /\s([a-zA-Z][\w-]*)\s*(?:=|\s|$)/g;
-    let attrMatch;
-    while ((attrMatch = attrNameRegex.exec(attrsStr)) !== null) {
-      const attrName = attrMatch[1].toLowerCase();
-      if (FORBIDDEN_ATTR_PATTERNS.some((p) => p.test(attrName))) {
-        forbiddenAttrs.push(`${tagName}[${attrName}]`);
+      for (const attr of node.attrs ?? []) {
+        const attrName = attr.name.toLowerCase();
+        if (FORBIDDEN_ATTR_PATTERNS.some((p) => p.test(attrName))) {
+          forbiddenAttrs.push(`${tagName}[${attrName}]`);
+        }
+      }
+
+      if (tagName === 'img' && !(node.attrs ?? []).some((a) => a.name.toLowerCase() === 'alt')) {
+        missingAlts = true;
       }
     }
+    for (const child of node.childNodes ?? []) walk(child);
+  })(fragment);
 
-    // Verificar que <img> tenga atributo alt
-    if (tagName === 'img' && !/\balt\s*=/i.test(attrsStr)) {
-      missingAlts = true;
-    }
-  }
-
-  return { tags, forbiddenAttrs, missingAlts };
+  return { tags, forbiddenAttrs, missingAlts, parseErrors };
 }
 
 /**
@@ -88,7 +110,7 @@ function analyzeHtml(html) {
  */
 function validateHtml(html, fieldName) {
   const errors = [];
-  const { tags, forbiddenAttrs, missingAlts } = analyzeHtml(html);
+  const { tags, forbiddenAttrs, missingAlts, parseErrors } = analyzeHtml(html);
 
   const unknownTags = [...new Set(tags)].filter(
     (t) => !ALLOWED_TAGS.has(t) && !FORBIDDEN_TAGS.has(t)
@@ -106,6 +128,9 @@ function validateHtml(html, fieldName) {
   }
   if (missingAlts) {
     errors.push(`${fieldName}: hay imágenes <img> sin atributo alt`);
+  }
+  if (parseErrors.length > 0) {
+    errors.push(`${fieldName}: HTML con sintaxis inválida (${[...new Set(parseErrors)].join(', ')})`);
   }
 
   // Marcadores de cita AI ([cite: N]) — artefactos del asistente de escritura

@@ -264,6 +264,39 @@ describe('validateArticle — HTML permitido / prohibido', () => {
     const errors = validateArticle(baseArticle({ contentHtml: '<script>alert(1)</script>' }));
     assert.ok(errorsContaining(errors, 'tags prohibidos'));
   });
+
+  // Regresión: la regex anterior (ver CHANGELOG 1.21.0) cortaba un tag a la
+  // mitad cuando un atributo entre comillas contenía '>' — un parser real
+  // (parse5) lo resuelve por construcción.
+  test('acepta href con ">" dentro del valor entre comillas', () => {
+    const errors = validateArticle(
+      baseArticle({ contentHtml: '<p><a href="https://example.com/?a=1>2">link</a></p>' })
+    );
+    assert.deepEqual(errors, []);
+  });
+
+  // Regresión: la regex anterior podía interpretar tags dentro de un
+  // comentario HTML como tags reales. parse5 los trata como un único nodo
+  // de comentario, sin bajar a su contenido.
+  test('no detecta tags escondidos dentro de un comentario HTML', () => {
+    const errors = validateArticle(
+      baseArticle({ contentHtml: '<!-- <div class="x">nota interna</div> --><p>Texto real.</p>' })
+    );
+    assert.deepEqual(errors, []);
+  });
+
+  test('detecta HTML con sintaxis inválida (caracteres inesperados en el markup)', () => {
+    const errors = validateArticle(baseArticle({ contentHtml: '<p>Texto<a valor</p>' }));
+    assert.ok(errorsContaining(errors, 'sintaxis inválida'));
+  });
+
+  test('un <ul>/<li> sin cerrar sigue siendo válido — el HTML5 es forgiving por spec', () => {
+    // No es un "parse error" del spec — el navegador (y SPIP) lo resuelven
+    // implícitamente cerrando cada <li> antes del siguiente. No debe
+    // bloquear la publicación.
+    const errors = validateArticle(baseArticle({ contentHtml: '<ul><li>Uno<li>Dos</ul>' }));
+    assert.deepEqual(errors, []);
+  });
 });
 
 describe('validateArticle — chapo / ps', () => {
