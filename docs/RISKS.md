@@ -1,8 +1,68 @@
-weaknesses / risks
+# Risks / Weaknesses
 
-No authentication on the Express server (server.mjs) despite exposing endpoints that can publish and permanently delete live articles. It's documented as a "single-user local tool," but app.listen(PORT) with no host argument binds to all interfaces, not just localhost — if this machine is ever reachable on a network, anyone could hit /api/articles/:id/publish or the delete endpoints.
-Fragile browser automation: spip-admin.mjs/spip-client.mjs drive the SPIP admin UI via CSS selectors and hardcoded waitForTimeout() calls (ranging ~400ms–3000ms across both files) rather than robust wait conditions. Any SPIP UI change silently breaks this, and timing-based waits are a known source of flaky failures.
-Regex-based HTML validation (article-validator.mjs's analyzeHtml) is explicitly acknowledged as "not a full parser" — fine as a best-effort gate, but could miss malformed/nested markup a real parser would catch.
-Single points of failure by design, acknowledged: the in-memory publish lock is explicitly "sufficient for a single-user local tool" but would break under multiple server instances — correctly flagged in a comment rather than silently risky.
-looksLikeStructuredPaste() (src/lib/text-to-html.mjs) is called server-side from the PUT /api/articles/:id/draft route, not client-side. It is a non-blocking warning returned in the response body (data.warning), displayed as a toast by the frontend — not a server-side gate. Nothing in article-validator.mjs or the write path stops a whole other article's JSON from being pasted into contentHtml and saved as-is if the warning is dismissed or bypassed (e.g. direct API calls, or the CLI publish script). This already happened once in practice: articulo-1788658811564.json had another article's full JSON object pasted into its contentHtml, which zeroed out `topics` and went unnoticed until an explicit validateArticle() sweep over articles/*.json turned it up (fixed in 1.8.1 — CHANGELOG). The self-heal in listArticles() demotes an already-`terminado` article that fails validation, which is why this one was caught before publishing, but a corrupted `en-progreso` draft can sit unnoticed indefinitely since nothing scans for it proactively.
-Durable side effects in library code aren't reliably seamed for tests. publish-use-case.mjs's write-back retry path originally called logWriteBackFailure() directly with no way to intercept it, so the test exercising that failure path appended real entries to writeback-failures.log.jsonl on every `node --test` run — 34 identical test-pollution entries accumulated over several days before anyone looked at the file (fixed in 1.8.1 by adding a `_logWriteBackFailure` seam, same pattern as `_writeBack`/`_writeBackToFile`). Worth auditing other fs.appendFileSync/fs.writeFileSync call sites in src/lib/ for the same gap — live-write-gateway.mjs's audit-log writer is the most obvious remaining candidate, since nothing currently stops a test from hitting the real live-write-audit.log.jsonl the same way.
+## Priority order for Etapa 4 (Groq implementation) and beyond
+
+The risks below are ordered by when they become blocking constraints:
+
+- **Etapa 4 (now):** #3 — Groq will generate HTML, so the validator must be able to catch bad output reliably.
+- **Before mobile/multi-user:** #1 and #4 — authentication and the single-process lock must be solved before the server is exposed to more than one user or instance.
+- **Ongoing / background:** #2 — browser automation fragility is a permanent maintenance cost; no single fix, mitigated incrementally.
+- **Not blocking Etapa 4:** #5, #6 — remain real risks but don't interact with the Groq pipeline directly.
+
+---
+
+## #1 — No authentication; server binds all interfaces
+**Priority: solve before mobile/multi-user deployment**
+
+No authentication on the Express server (`server.mjs`) despite exposing endpoints that can publish and permanently delete live articles. It's documented as a "single-user local tool," but `app.listen(PORT)` with no host argument binds to all interfaces, not just localhost — if this machine is ever reachable on a network, anyone could hit `/api/articles/:id/publish` or the delete endpoints.
+
+> **Etapa 4 note:** Not blocking for Groq itself (which runs server-side and never touches auth). Becomes critical the moment this server is exposed as a mobile app's backend. Solve before that transition: add at minimum a static bearer token in `.env` checked on every request, and bind to `127.0.0.1` explicitly until a proper auth layer exists.
+
+---
+
+## #2 — Fragile browser automation
+**Priority: ongoing maintenance, no single fix**
+
+`spip-admin.mjs` / `spip-client.mjs` drive the SPIP admin UI via CSS selectors and hardcoded `waitForTimeout()` calls (ranging ~400ms–3000ms across both files) rather than robust wait conditions. Any SPIP UI change silently breaks this, and timing-based waits are a known source of flaky failures under load.
+
+> **Etapa 4 note:** Groq does not interact with Playwright directly, so this risk doesn't worsen in Etapa 4. It remains a background maintenance cost — replace fixed timeouts with `waitForSelector()` / `waitForResponse()` incrementally as each script is touched for other reasons.
+
+---
+
+## #3 — Regex-based HTML validation
+**Priority: solve during Etapa 4**
+
+`article-validator.mjs`'s `analyzeHtml` is explicitly acknowledged as "not a full parser" — fine as a best-effort gate when a human hand-types HTML, but will miss malformed or unexpectedly nested markup once Groq is generating `contentHtml` programmatically.
+
+> **Etapa 4 note:** This is the one risk that becomes directly relevant during Etapa 4. Before shipping `groq-enrichment.mjs` to production, replace the regex analyzer with a real parser (`node-html-parser` or `parse5`) so that Groq's output is validated against the allowed-tag schema with the same rigour as hand-authored content. A malformed `<ul>` or unclosed tag from a Groq response should be caught here, not silently passed to SPIP.
+
+---
+
+## #4 — In-memory publish lock (single-process only)
+**Priority: solve before mobile/multi-user deployment**
+
+The in-memory `publishingInProgress` Set is explicitly "sufficient for a single-user local tool" but would break under multiple server instances — correctly flagged in a comment rather than silently risky.
+
+> **Etapa 4 note:** Not blocking for Groq. Becomes a real constraint the moment the server runs as a mobile app's backend with more than one process or replica. Solve at the same time as #1: replace the Set with a Redis SETNX lock (pattern already documented in ROADMAP.md Etapa 2) before any multi-instance deployment.
+
+---
+
+## #5 — `looksLikeStructuredPaste()` is a warning, not a gate
+**Priority: not blocking Etapa 4**
+
+`looksLikeStructuredPaste()` (`src/lib/text-to-html.mjs`) is called server-side from `PUT /api/articles/:id/draft`, not client-side. It is a non-blocking warning returned in the response body (`data.warning`), displayed as a toast by the frontend — not a server-side gate. Nothing in `article-validator.mjs` or the write path stops a whole other article's JSON from being pasted into `contentHtml` and saved as-is if the warning is dismissed or bypassed (e.g. direct API calls, or the CLI publish script).
+
+This already happened once in practice: `articulo-1788658811564.json` had another article's full JSON object pasted into its `contentHtml`, which zeroed out `topics` and went unnoticed until an explicit `validateArticle()` sweep over `articles/*.json` turned it up (fixed in 1.8.1 — CHANGELOG). The self-heal in `listArticles()` demotes an already-`terminado` article that fails validation, which is why this one was caught before publishing, but a corrupted `en-progreso` draft can sit unnoticed indefinitely since nothing scans for it proactively.
+
+> **Etapa 4 note:** Groq writes to fields directly via `writeBack()`, not through the draft endpoint, so this specific warning path is bypassed entirely. The real mitigation for Groq output is #3 (parser-based validation).
+
+---
+
+## #6 — Durable side effects in library code not reliably seamed for tests
+**Priority: not blocking Etapa 4**
+
+`publish-use-case.mjs`'s write-back retry path originally called `logWriteBackFailure()` directly with no way to intercept it, so the test exercising that failure path appended real entries to `writeback-failures.log.jsonl` on every `node --test` run — 34 identical test-pollution entries accumulated over several days before anyone looked at the file (fixed in 1.8.1 by adding a `_logWriteBackFailure` seam, same pattern as `_writeBack`/`_writeBackToFile`).
+
+Worth auditing other `fs.appendFileSync`/`fs.writeFileSync` call sites in `src/lib/` for the same gap — `live-write-gateway.mjs`'s audit-log writer is the most obvious remaining candidate, since nothing currently stops a test from hitting the real `live-write-audit.log.jsonl` the same way.
+
+> **Etapa 4 note:** `groq-enrichment.mjs` should be written with injectable seams from the start (`_groqClient` parameter, same pattern as `_spipClient` in `publish-use-case.mjs`) so it can be tested without a real Groq API key. Don't repeat the pattern of adding seams after the fact.
