@@ -195,9 +195,9 @@ Con esto la UX (frontend disable) evita clicks repetidos y el backend
 garantiza la exclusión mutua real incluso en entornos con múltiples réplicas.
 
 ### Qué no incluye todavía
-- Editor de contenido (viene en la Etapa 3)
-- Subida de imágenes
-- Autenticación (es una herramienta interna de un solo usuario)
+- [x] Editor de contenido (implementado en Etapa 3)
+- [ ] Subida de imágenes
+- [x] Autenticación (aplazada deliberadamente — herramienta de un solo usuario, ver Etapa 5)
 
 ### Stack sugerido
 - **Backend:** Node.js + Express (mínimo, sin framework pesado) que expone
@@ -364,7 +364,7 @@ PLAN_KILOMBO.md §5).
 Estas no son decisiones abiertas — son requisitos no negociables que deben
 respetarse al escribir `groq-enrichment.mjs`:
 
-1. **Lazy import + guardedWrite, igual que `spip-client.mjs`.**
+- [ ] **Lazy import + guardedWrite, igual que `spip-client.mjs`.**
    `server.mjs` importa `groq-enrichment.mjs` de forma dinámica
    (`await import(...)`) solo cuando va a llamar a Groq, no en el arranque
    del módulo. Esto garantiza que `--validate-only` y los tests sigan
@@ -373,7 +373,7 @@ respetarse al escribir `groq-enrichment.mjs`:
    debe pasar por `guardedWrite()` de `live-write-gateway.mjs` para que
    quede registrada en el audit log.
 
-2. **Timeout + un reintento alrededor de la llamada Groq.**
+- [ ] **Timeout + un reintento alrededor de la llamada Groq.**
    Una llamada LLM que cuelgue 30 s dentro de un route handler de Express
    bloquea el único proceso Node para todos los demás usuarios del dashboard.
    La llamada debe tener un `AbortSignal` con timeout (recomendado: 20 s) y
@@ -381,7 +381,7 @@ respetarse al escribir `groq-enrichment.mjs`:
    fallan, se aplica la decisión #2: preguntar al usuario si desea continuar
    con el contenido sin estructurar.
 
-3. **La salida de Groq pasa por `validateHtml()` igual que el input humano.**
+- [ ] **La salida de Groq pasa por `validateHtml()` igual que el input humano.**
    No tratar el output de la IA como "confiable". El artefacto `[cite: N]`
    que ya detecta `article-validator.mjs` existe precisamente porque un
    asistente de escritura generó ese patrón una vez y llegó a publicarse.
@@ -391,7 +391,7 @@ respetarse al escribir `groq-enrichment.mjs`:
    (`node-html-parser` / `parse5`) en cuanto esté implementado (ver
    `docs/RISKS.md` §3).
 
-4. **Seams inyectables desde el día uno.**
+- [ ] **Seams inyectables desde el día uno.**
    `groq-enrichment.mjs` debe aceptar un parámetro `_groqClient` (o
    equivalente) para tests, igual que `publish-use-case.mjs` acepta
    `_spipClient`. No añadir seams después de que los tests revelen la
@@ -485,18 +485,18 @@ de todas las vistas del dashboard.
 
 ### Lo que hay que añadir
 
-- `workflowStatus: 'retractado'` y `'borrado'` como valores válidos en
+- [ ] `workflowStatus: 'retractado'` y `'borrado'` como valores válidos en
   `articles-store.mjs` y la lógica de listado.
-- Botón "Desaprobar" y botón "Borrar de SPIP" en las filas de Terminado con
+- [ ] Botón "Desaprobar" y botón "Borrar de SPIP" en las filas de Terminado con
   `spipArticleId`, uno al lado del otro con estilos diferenciados (amarillo
   advertencia vs. rojo peligro). Cada uno con su propio `confirm()`.
-- `confirm()` de "Borrar de SPIP" más reforzado (irreversible, dos líneas de
+- [ ] `confirm()` de "Borrar de SPIP" más reforzado (irreversible, dos líneas de
   advertencia).
-- Endpoint `POST /api/articles/:id/retract` en `server.mjs` que orqueste:
+- [ ] Endpoint `POST /api/articles/:id/retract` en `server.mjs` que orqueste:
   cambio de estado SPIP → write-back de `workflowStatus: 'retractado'`.
   (Reutiliza `publishArticleUseCase` como modelo arquitectónico — mismo
   patrón de seams inyectables para testear sin Playwright.)
-- Tests en `test/publish-use-case.test.mjs` o un archivo hermano que
+- [ ] Tests en `test/publish-use-case.test.mjs` o un archivo hermano que
   verifiquen que la retractación escribe los campos correctos.
 
 ### Entregable de cierre
@@ -520,30 +520,30 @@ construido como "una persona, un portátil, localhost":
 
 ### Lo que hay que resolver antes de exponer el servidor a una red
 
-1. **Autenticación.** Un app móvil implica un servidor alcanzable por red.
+- [ ] **Autenticación.** Un app móvil implica un servidor alcanzable por red.
    Como mínimo: un token API compartido en un header (`Authorization:
    Bearer <token>`, chequeado en `asyncHandler` o en un middleware previo),
    con el token en `.env`. No publicar el servidor en ninguna red sin esto.
 
-2. **Binding explícito de host.**
+- [ ] **Binding explícito de host.**
    `app.listen(PORT)` sin argumento de host vincula a todas las interfaces.
    Mientras no haya auth: bind explícito a `127.0.0.1`. Una vez que haya
    auth: bind a `0.0.0.0` deliberadamente, detrás de lo que se elija.
 
-3. **CORS.**
+- [ ] **CORS.**
    Hoy no hay middleware `cors` — es irrelevante porque el frontend se sirve
    desde el mismo origen. Un app móvil hablando a este servidor como API
    necesita CORS configurado explícitamente, con orígenes permitidos
    declarados, no permisivo por defecto.
 
-4. **Upgrade del publish lock.**
+- [ ] **Upgrade del publish lock.**
    El Set en memoria `publishingInProgress` no sobrevive a una segunda
    instancia del servidor. Si "app móvil" implica alguna vez "servidor
    corriendo en algún lugar alcanzable 24/7, posiblemente reiniciado o
    escalado", este punto necesita el upgrade a Redis-lock ya esbozado en
    Etapa 2 de este roadmap.
 
-5. **Rate limiting en `/api/site/*`.**
+- [ ] **Rate limiting en `/api/site/*`.**
    Esos endpoints pueden borrar permanentemente artículos del sitio en vivo.
    Un teléfono perdido, robado, o corriendo una build con un bug es un
    modelo de amenaza completamente diferente a "el único portátil que tengo
