@@ -208,7 +208,6 @@ export async function demoteArticle(id, btn, onSettled) {
 }
 
 // ── Promote (En Progreso → Terminado) ───────────────────────────────────────
-// ── Promote (En Progreso → Terminado) ───────────────────────────────────────
 //
 // Etapa 4: Handles Groq finalization failures (202) by offering user the choice
 // to approve without Groq (sends skipGroq: true on retry).

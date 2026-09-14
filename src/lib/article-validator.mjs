@@ -10,7 +10,7 @@
  *   if (errors.length > 0) { ... }
  */
 
-import { parseFragment } from 'parse5';
+import { parseFragment, serialize } from 'parse5';
 
 // ── Valores permitidos ────────────────────────────────────────────────────────
 
@@ -37,6 +37,11 @@ const FORBIDDEN_ATTR_PATTERNS = [/^style$/i, /^class$/i, /^on\w+$/i];
 
 // Tags prohibidos explícitamente
 const FORBIDDEN_TAGS = new Set(['div', 'span', 'script', 'style', 'iframe', 'object', 'embed']);
+
+// Subset de FORBIDDEN_TAGS cuyo *contenido* es peligroso y debe eliminarse
+// por completo (código, no texto legible) — a diferencia de div/span, que
+// son solo envoltorios estructurales y cuyo contenido sí queremos conservar.
+const DANGEROUS_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed']);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -142,6 +147,73 @@ export function validateHtml(html, fieldName) {
   }
 
   return errors;
+}
+
+/**
+ * Limpia el HTML de un campo (contentHtml, chapo, ps) eliminando tags y
+ * atributos no permitidos — a diferencia de validateHtml(), que solo
+ * *reporta* problemas, esta función los *elimina*.
+ *
+ * Reglas:
+ *   - <script>, <style>, <iframe>, <object>, <embed>: se eliminan por
+ *     completo, incluido su contenido (es código, no texto legible —
+ *     conservarlo como texto plano igual sería basura o un riesgo).
+ *   - Cualquier otro tag no permitido (incluidos <div>/<span>): se
+ *     "desenvuelve" — se elimina el tag pero se conserva su contenido,
+ *     igual que hace sanitizeHtml() en public/js/detail-view.js al mostrar
+ *     el artículo.
+ *   - Atributos prohibidos (style, class, on*) se eliminan de los tags
+ *     permitidos que los traían.
+ *
+ * Se usa para sanear la salida de Groq antes de guardarla — la salida de
+ * un LLM no es HTML humano ya restringido de antemano como el que produce
+ * textToParagraphHtml(), así que no basta con *reportar* errores, hay que
+ * *corregirlos*.
+ *
+ * @param {string} html
+ * @returns {string} HTML saneado. Devuelve '' si el input no es un string.
+ */
+export function sanitizeHtml(html) {
+  if (!html || typeof html !== 'string') return '';
+
+  const fragment = parseFragment(html);
+
+  function sanitizeChildren(node) {
+    const kept = [];
+    for (const child of node.childNodes ?? []) {
+      if (!child.tagName) {
+        kept.push(child);
+        continue;
+      }
+
+      const tag = child.tagName.toLowerCase();
+
+      if (DANGEROUS_TAGS.has(tag)) {
+        // Eliminar por completo — ni el tag ni su contenido se conservan.
+        continue;
+      }
+
+      // Sanear recursivamente antes de decidir si el propio nodo se
+      // conserva, envuelve o desenvuelve.
+      sanitizeChildren(child);
+
+      if (!ALLOWED_TAGS.has(tag)) {
+        // Tag no permitido (p.ej. <div>/<span>) — desenvolver: promover
+        // sus hijos ya saneados al lugar del padre.
+        kept.push(...(child.childNodes ?? []));
+        continue;
+      }
+
+      child.attrs = (child.attrs ?? []).filter(
+        (attr) => !FORBIDDEN_ATTR_PATTERNS.some((p) => p.test(attr.name.toLowerCase()))
+      );
+      kept.push(child);
+    }
+    node.childNodes = kept;
+  }
+
+  sanitizeChildren(fragment);
+  return serialize(fragment);
 }
 
 // ── Validador principal ───────────────────────────────────────────────────────

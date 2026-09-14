@@ -173,9 +173,11 @@ test('enrichDraft — forbidden HTML tags in contentHtml validates and warns', a
 
   const result = await enrichDraft('Raw text', {}, { _groqClient: mockClient });
 
-  // validateHtml should have caught the forbidden tags
-  assert(result.contentHtml); // still has some content
-  assert(result.groqWarnings.length > 0); // should have warnings
+  // sanitizeHtml() must actually strip the forbidden tags, not just warn.
+  assert(!result.contentHtml.includes('<div>'));
+  assert(!result.contentHtml.includes('<script>'));
+  assert(!result.contentHtml.includes('alert('));
+  assert(result.contentHtml.includes('Real content.'));
 });
 
 test('enrichDraft — no GROQ_API_KEY and no _groqClient throws GROQ_API_ERROR', async (t) => {
@@ -326,24 +328,53 @@ test('finalizeArticle — empty response (nothing to fix)', async (t) => {
   assert.deepStrictEqual(result.groqWarnings, []);
 });
 
-test('finalizeArticle — contentHtml validation and sanitisation', async (t) => {
+test('finalizeArticle — contentHtml with real problems gets sanitised and patched', async (t) => {
   const mockClient = mockGroqClient([{
     message: {
       content: mockResponse({
-        contentHtml: '<div><p>Bad tags.</p></div>',
+        // Groq's "fix" for content that had forbidden tags — still comes
+        // back with a <script> in it, which sanitiseContentHtml() must strip.
+        contentHtml: '<div><script>alert(1)</script><p>Cleaned content.</p></div>',
       }),
     },
   }]);
 
   const article = {
     title: 'Article',
-    contentHtml: '<p>Original.</p>',
+    // The CURRENT contentHtml is the one with the actual problem —
+    // this is what should trigger the patch, not just Groq offering one.
+    contentHtml: '<div><p>Bad tags.</p></div>',
   };
 
   const result = await finalizeArticle(article, { _groqClient: mockClient });
 
-  assert(result.patch.contentHtml); // still patched, but with warnings
-  assert(result.groqWarnings.length > 0);
+  assert(result.patch.contentHtml);
+  assert(!result.patch.contentHtml.includes('<div>'));
+  assert(!result.patch.contentHtml.includes('<script>'));
+  assert(result.patch.contentHtml.includes('Cleaned content.'));
+});
+
+test('finalizeArticle — does NOT overwrite contentHtml that is already valid', async (t) => {
+  // Even if Groq returns a rewritten contentHtml, it must not replace an
+  // existing field that already passes validation — only fields that are
+  // actually broken should be patched. This guards against an LLM
+  // "helpfully" rewording content the prompt told it to leave alone.
+  const mockClient = mockGroqClient([{
+    message: {
+      content: mockResponse({
+        contentHtml: '<p>Groq rewrote this for no reason.</p>',
+      }),
+    },
+  }]);
+
+  const article = {
+    title: 'Article',
+    contentHtml: '<p>Original, already valid.</p>',
+  };
+
+  const result = await finalizeArticle(article, { _groqClient: mockClient });
+
+  assert.strictEqual(result.patch.contentHtml, undefined);
 });
 
 test('finalizeArticle — malformed JSON throws GROQ_PARSE_ERROR', async (t) => {

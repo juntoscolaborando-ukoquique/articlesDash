@@ -31,7 +31,10 @@ el backend que la sustenta esté verificado.
 Etapa 1 — Publicar    █████████████  ✅ CERRADA — primera corrida real: ID 109
 Etapa 2 — Dashboard   █████████████  ✅ CERRADA
 Etapa 3 — Editor      ████████░░░░░  🔄 EN CURSO — duplicados locales cerrado (v1.20.0)
-Etapa 4 — IA pipeline ░░░░░░░░░░░░░  no iniciada
+Etapa 4 — IA pipeline █████████████  🔄 implementada en apply/articulos-fixed
+                                     (commit 2b02940), pendiente de merge a
+                                     main y de probarse contra la API real
+                                     de Groq — ver ETAPA-4-COMPLETION.md
 ```
 
 ---

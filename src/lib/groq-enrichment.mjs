@@ -35,7 +35,7 @@
  * @module
  */
 
-import { validateHtml } from './article-validator.mjs';
+import { validateHtml, sanitizeHtml } from './article-validator.mjs';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -136,15 +136,21 @@ function parseJsonResponse(raw, expectArray = false) {
 }
 
 /**
- * Sanitises a contentHtml string coming from Groq through the same
- * validateHtml() gate as human input. Returns { html, warnings[] }.
- * Never throws — if validation finds problems, logs them as warnings and
- * returns the html as-is (the human can correct in En Progreso).
+ * Sanitises a contentHtml string coming from Groq. Unlike human input
+ * (which already comes pre-restricted from textToParagraphHtml()), Groq's
+ * output is free-form and must actually be cleaned, not just checked —
+ * sanitizeHtml() strips forbidden tags/attributes (dropping <script>/
+ * <style>/<iframe>/<object>/<embed> entirely, unwrapping anything else not
+ * on the allow-list). validateHtml() then runs on the *cleaned* result so
+ * any remaining structural issues (missing alt text, [cite: N] artifacts,
+ * malformed markup) still surface as warnings for a human to check in
+ * En Progreso. Never throws.
  */
 function sanitiseContentHtml(html) {
   if (!html || typeof html !== 'string') return { html: '', warnings: [] };
-  const errors = validateHtml(html, 'contentHtml');
-  return { html, warnings: errors };
+  const cleaned = sanitizeHtml(html);
+  const warnings = validateHtml(cleaned, 'contentHtml');
+  return { html: cleaned, warnings };
 }
 
 // ── Prompts ───────────────────────────────────────────────────────────────────
@@ -362,8 +368,18 @@ export async function finalizeArticle(article, { _groqClient } = {}) {
   const patch = {};
   const warnings = [];
 
-  // contentHtml — validate through the same gate as human input
-  if (typeof parsed.contentHtml === 'string') {
+  // contentHtml — only patch if the CURRENT contentHtml actually has a
+  // problem (empty, forbidden tags/attrs, [cite: N] artifacts, etc.).
+  // Groq's own prompt asks it to "omit fields that are already fine", but
+  // that's a request, not a guarantee — an LLM can still return a
+  // reworded/rewritten contentHtml even when nothing was wrong. Gating on
+  // the current field's own validation result (same check used everywhere
+  // else in this function) keeps this in line with the "never overwrite
+  // something that already works" rule instead of trusting the prompt alone.
+  const currentHtmlErrors = article.contentHtml ? validateHtml(article.contentHtml, 'contentHtml') : [];
+  const currentHtmlNeedsFix = !article.contentHtml?.trim() || currentHtmlErrors.length > 0;
+
+  if (typeof parsed.contentHtml === 'string' && currentHtmlNeedsFix) {
     const { html, warnings: htmlWarnings } = sanitiseContentHtml(parsed.contentHtml);
     patch.contentHtml = html;
     warnings.push(...htmlWarnings);
