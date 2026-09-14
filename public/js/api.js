@@ -23,8 +23,60 @@
 
 'use strict';
 
-import { showToast, apiFetch } from './utils.js';
-import { setActiveTab, showListView, loadArchive } from './list-view.js';
+/**
+ * Shows a modal dialog asking the user whether to continue without Groq.
+ * Returns a Promise<boolean> — true if user clicks "continue", false if cancel.
+ */
+export function showGroqFailureDialog(error, code, hint) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'groq-error-modal';
+    modal.innerHTML = `
+      <div class="groq-error-content">
+        <h3>⚠️ Error de Enriquecimiento</h3>
+        <p><strong>Groq no pudo procesar el artículo:</strong></p>
+        <p class="groq-error-message">${escapeHtml(error)}</p>
+        <p class="groq-error-code">(Código: ${escapeHtml(code)})</p>
+        <p class="groq-error-hint">${escapeHtml(hint)}</p>
+        <div class="groq-error-actions">
+          <button class="btn btn-primary" id="groq-continue">Continuar sin Groq</button>
+          <button class="btn btn-secondary" id="groq-cancel">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    
+    const continueBtn = modal.querySelector('#groq-continue');
+    const cancelBtn = modal.querySelector('#groq-cancel');
+    
+    function cleanup() {
+      modal.remove();
+    }
+    
+    continueBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(true);
+    });
+    
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(false);
+    });
+  });
+}
+
+/**
+ * Simple HTML escaping to prevent XSS.
+ */
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 async function postTransition(endpoint, {
   btn,
@@ -56,6 +108,34 @@ async function postTransition(endpoint, {
   }
 
   showToast(outcome.message, outcome.toastType ?? 'error', outcome.toastDuration ?? 5000);
+
+  // Etapa 4: Handle Groq failures with user dialog
+  if (outcome.groqRetryNeeded) {
+    const userContinue = await showGroqFailureDialog(
+      outcome.groqError,
+      outcome.groqCode,
+      outcome.groqHint
+    );
+    if (userContinue && outcome.endpoint) {
+      // Retry with skipGroq: true
+      return postTransition(outcome.endpoint, {
+        btn,
+        loadingText: 'Enviando (sin Groq)…',
+        idleText,
+        busyClass,
+        body: { ...(body ?? {}), skipGroq: true },
+        onSettled,
+        onResult,
+      });
+    }
+    // User cancelled — restore button and return
+    if (btn) {
+      btn.disabled = false;
+      if (busyClass) btn.classList.remove(busyClass);
+      btn.textContent = idleText;
+    }
+    return false;
+  }
 
   if (outcome.onSuccess) await outcome.onSuccess();
   else if (outcome.settle) await onSettled();
@@ -128,12 +208,31 @@ export async function demoteArticle(id, btn, onSettled) {
 }
 
 // ── Promote (En Progreso → Terminado) ───────────────────────────────────────
+// ── Promote (En Progreso → Terminado) ───────────────────────────────────────
+//
+// Etapa 4: Handles Groq finalization failures (202) by offering user the choice
+// to approve without Groq (sends skipGroq: true on retry).
 
 export async function promoteArticle(id, btn, onSettled) {
   return postTransition(`/api/articles/${encodeURIComponent(id)}/promote`, {
     btn, onSettled,
     loadingText: 'Aprobando…', idleText: 'Aprobar',
     onResult: (res, data) => {
+      // Groq finalization failed — offer user to continue without it
+      if (res.status === 202 && data.groqFailed) {
+        return {
+          success: false,
+          restore: true,
+          toastType: 'error',
+          toastDuration: 0,
+          message: `⚠️ Groq falló: ${data.groqError}`,
+          groqRetryNeeded: true,
+          groqError: data.groqError,
+          groqCode: data.groqCode,
+          groqHint: data.hint,
+          endpoint: `/api/articles/${encodeURIComponent(id)}/promote`,
+        };
+      }
       if (res.ok && data.success) {
         return { success: true, settle: true, toastType: 'success', message: '✅ Enviado a Terminado' };
       }
@@ -170,12 +269,31 @@ export async function sendToEdicionArticle(id, btn, onSettled) {
 // the caller manages itself. postTransition() skips button DOM writes when
 // btn is null; the boolean return value is how handleEditorSend finds out
 // whether it needs to re-enable its own button.
+//
+// Etapa 4: Handles Groq enrichment failures (202) by offering user the choice
+// to continue without Groq (sends skipGroq: true on retry).
 
 export async function sendToRevisionArticle(id, btn, onSettled) {
   return postTransition(`/api/articles/${encodeURIComponent(id)}/send-to-revision`, {
     btn, onSettled,
     loadingText: 'Enviando…', idleText: 'Enviar a Revisión →',
     onResult: (res, data) => {
+      // Groq enrichment failed — offer user to continue without it
+      if (res.status === 202 && data.groqFailed) {
+        return {
+          success: false,
+          restore: true,
+          toastType: 'error',
+          toastDuration: 0, // permanent until dismissed
+          message: `⚠️ Groq falló: ${data.groqError}`,
+          // Signal to postTransition: call showGroqFailureDialog and retry if user agrees
+          groqRetryNeeded: true,
+          groqError: data.groqError,
+          groqCode: data.groqCode,
+          groqHint: data.hint,
+          endpoint: `/api/articles/${encodeURIComponent(id)}/send-to-revision`,
+        };
+      }
       if (res.ok && data.success) {
         return { success: true, settle: true, toastType: 'success', message: '📝 Enviado a En Progreso' };
       }

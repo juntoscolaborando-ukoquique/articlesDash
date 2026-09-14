@@ -246,6 +246,46 @@ app.post('/api/articles/:id/promote', asyncHandler('POST /api/articles/:id/promo
       validationErrors: errors,
     });
   }
+  // Groq finalisation (Etapa 4, Transición 2) — lazy import, skippable.
+  // Runs BEFORE the final validateArticle pass so Groq can fix any
+  // remaining gaps (missing descriptif, chapo, topics, bad section).
+  // On Groq failure, offer the user the choice to promote anyway.
+  const skipGroqFinalize = req.body?.skipGroq === true;
+
+  if (!skipGroqFinalize && process.env.GROQ_API_KEY) {
+    try {
+      const { finalizeArticle } = await import('./lib/groq-enrichment.mjs');
+      const { patch, groqWarnings } = await finalizeArticle(article);
+      if (Object.keys(patch).length > 0) {
+        writeBack(id, patch);
+      }
+      // Re-read after patch so the final validateArticle sees updated fields
+      const patched = loadActiveArticleOr404(id, res);
+      if (!patched) return;
+      const errorsAfterGroq = validateArticle(patched);
+      if (errorsAfterGroq.length > 0) {
+        return res.status(422).json({
+          error: 'El artículo no pasa la validación y no puede ser aprobado.',
+          validationErrors: errorsAfterGroq,
+          groqWarnings,
+        });
+      }
+      promoteToTerminado(id);
+      return res.json({
+        success: true,
+        workflowStatus: 'terminado',
+        ...(groqWarnings.length ? { groqWarnings } : {}),
+      });
+    } catch (groqErr) {
+      return res.status(202).json({
+        groqFailed: true,
+        groqError:  groqErr.message,
+        groqCode:   groqErr.code ?? 'GROQ_ERROR',
+        hint:       'Puedes aprobar sin Groq — el artículo se validará tal como está.',
+      });
+    }
+  }
+
   promoteToTerminado(id);
   res.json({ success: true, workflowStatus: 'terminado' });
 }));
@@ -308,23 +348,61 @@ app.post('/api/articles/:id/send-to-revision', asyncHandler('POST /api/articles/
     });
   }
 
-  // Splitter heurístico (docs/IMPROVE_STEPS.md, Paso 2 — implementado, archivo eliminado en v1.16.0): corre una sola vez,
-  // acá, en la transición — no en cada lectura. Nunca pisa un campo que el
-  // artículo ya tenga (p.ej. tras un demote + edición manual previa): el
-  // splitter solo llena huecos, la corrección humana previa siempre gana.
-  const { chapo, contentHtml, ps, guessed } = splitContentIntoFields(article.contentHtml);
-  writeBack(id, {
-    chapo,
-    contentHtml,
-    ps,
-    ...(guessed.sourceUrl && !article.sourceUrl ? { sourceUrl: guessed.sourceUrl } : {}),
-    ...(guessed.sourceSite && !article.sourceSite ? { sourceSite: guessed.sourceSite } : {}),
-    ...(guessed.sourceDate && !article.sourceDate ? { sourceDate: guessed.sourceDate } : {}),
-    ...(guessed.author && !article.author ? { author: guessed.author } : {}),
-  });
+  // Groq enrichment (Etapa 4) — lazy import so --validate-only and tests
+  // work without GROQ_API_KEY. Falls back to heuristic splitter on failure
+  // unless the client explicitly set skipGroq:true (meaning the user already
+  // saw the error and chose to continue without Groq).
+  const skipGroq = req.body?.skipGroq === true;
+  let groqWarnings = [];
+
+  if (!skipGroq && process.env.GROQ_API_KEY) {
+    try {
+      const { enrichDraft } = await import('./lib/groq-enrichment.mjs');
+      const result = await enrichDraft(article.contentHtml, article);
+
+      // Write back all fields that Groq filled, respecting the "never overwrite" rule
+      const patch = {
+        chapo:       result.chapo       || article.chapo       || '',
+        contentHtml: result.contentHtml || article.contentHtml,
+        ps:          result.ps          || article.ps          || '',
+        ...(result.guessed.sourceUrl  && !article.sourceUrl  ? { sourceUrl:  result.guessed.sourceUrl  } : {}),
+        ...(result.guessed.sourceSite && !article.sourceSite ? { sourceSite: result.guessed.sourceSite } : {}),
+        ...(result.guessed.sourceDate && !article.sourceDate ? { sourceDate: result.guessed.sourceDate } : {}),
+        ...(result.guessed.author     && !article.author     ? { author:     result.guessed.author     } : {}),
+        ...result.extra,
+      };
+      writeBack(id, patch);
+      groqWarnings = result.groqWarnings;
+
+    } catch (groqErr) {
+      // Groq failed — tell the frontend so it can ask the user whether to continue
+      return res.status(202).json({
+        groqFailed: true,
+        groqError:  groqErr.message,
+        groqCode:   groqErr.code ?? 'GROQ_ERROR',
+        hint:       'Puedes continuar sin Groq — el splitter heurístico separará los campos.',
+      });
+    }
+  } else {
+    // No Groq key, or user chose to skip: use the heuristic splitter
+    const { chapo, contentHtml, ps, guessed } = splitContentIntoFields(article.contentHtml);
+    writeBack(id, {
+      chapo,
+      contentHtml,
+      ps,
+      ...(guessed.sourceUrl  && !article.sourceUrl  ? { sourceUrl:  guessed.sourceUrl  } : {}),
+      ...(guessed.sourceSite && !article.sourceSite ? { sourceSite: guessed.sourceSite } : {}),
+      ...(guessed.sourceDate && !article.sourceDate ? { sourceDate: guessed.sourceDate } : {}),
+      ...(guessed.author     && !article.author     ? { author:     guessed.author     } : {}),
+    });
+  }
 
   sendToRevision(id);
-  res.json({ success: true, workflowStatus: 'en-progreso' });
+  res.json({
+    success: true,
+    workflowStatus: 'en-progreso',
+    ...(groqWarnings.length ? { groqWarnings } : {}),
+  });
 }));
 
 // ── API: guardar campos estructurados (En Progreso) ───────────────────────────

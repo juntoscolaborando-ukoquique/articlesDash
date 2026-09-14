@@ -108,7 +108,7 @@ function analyzeHtml(html) {
  * @param {string} fieldName
  * @returns {string[]}
  */
-function validateHtml(html, fieldName) {
+export function validateHtml(html, fieldName) {
   const errors = [];
   const { tags, forbiddenAttrs, missingAlts, parseErrors } = analyzeHtml(html);
 
