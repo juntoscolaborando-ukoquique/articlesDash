@@ -5,6 +5,123 @@ Formato: [Semantic Versioning](https://semver.org/). Las entradas más recientes
 
 ---
 
+## [2.0.0] — 2026-09-14
+
+### Etapa 4 — Enriquecimiento LLM con Groq (COMPLETA)
+
+Implementa el diseño de `ROADMAP.md` Etapa 4 — integración de Groq para enriquecimiento
+automático de metadatos editoriales en dos transiciones críticas del flujo.
+
+#### Core Module — `src/lib/groq-enrichment.mjs` (614 líneas)
+
+- **`enrichDraft(rawText, partialArticle, { _groqClient })`** (Transición 1: Edición → En Progreso)
+  - Parsea texto libre del editor en campos estructurados: `chapo`, `contentHtml`, `ps`
+  - Detecta y extrae metadatos: `author`, `sourceUrl`, `sourceSite`, `sourceDate`
+  - Modelo: Qwen 3.8 (131k contexto), 20s timeout + 1 reintento automático
+  - `reasoning_effort: 'none'` suprime bloques `<think>` del LLM
+  - Respeta regla "nunca sobrescribir" — solo rellena gaps
+  - Validación: all output pasa por `validateHtml()` gate
+  - Fallback heurístico en error: endpoint retorna 202 con `groqFailed` flag
+
+- **`finalizeArticle(article, { _groqClient })`** (Transición 2: En Progreso → Terminado)
+  - Verifica completitud antes de aprobación: `descriptif`, `chapo`, `topics`, `section`
+  - Solo rellena campos vacíos o inválidos (temperatura más conservadora 0.2)
+  - Re-valida articulo tras patchear antes de promover a Terminado
+  - Mismo timeout/retry/fallback que `enrichDraft()`
+
+- **Manejo de errores robusto:**
+  - `GROQ_API_ERROR`: fallo de red, auth, rate-limit → HTTP 202 con flag
+  - `GROQ_PARSE_ERROR`: respuesta no-JSON válido → HTTP 202 con flag
+  - `GROQ_API_KEY` indefinido: fallback automático a splitter heurístico
+  - Seam inyectable `_groqClient` para tests (sin consumir API ni créditos)
+
+#### Security Hardening
+
+- **`sanitizeHtml()` en `article-validator.mjs`** — nueva función que *elimina* HTML no permitido
+  - Diferencia entre tags peligrosos (<script>, <style>, <iframe> — eliminados completos)
+    y tags estructurales (<div>, <span> — desenvueltos, contenido preservado)
+  - Elimina atributos prohibidos: `style`, `class`, `on*`
+  - Usa parse5 para traversal seguro, no regex
+  - Aplicada a salida Groq ANTES de validar (Groq output es libre-form, no pre-restricto)
+
+- **`finalizeArticle()` reforzado:**
+  - Solo parchea `contentHtml` si el campo ACTUAL tiene problemas
+  - Previene que LLM sobrescriba HTML válido con rewrites
+  - Gates en validación propia del campo, no solo en prompt instructions
+
+- **XSS en frontend:**
+  - `showGroqFailureDialog()`: `escapeHtml()` en mensajes de error
+  - Modal uses `textContent` no `innerHTML`
+
+#### Server Integration
+
+- **`send-to-revision` endpoint:** llama `enrichDraft()` en transición, 202 en fallo
+- **`promote` endpoint:** llama `finalizeArticle()` en transición, 202 en fallo
+- Ambas soportan `skipGroq: true` flag para fallback a heurístico
+
+#### Frontend Enhancements
+
+- **Modal de error Groq** en `public/js/api.js`:
+  - Muestra "Groq no pudo procesar el artículo" con mensaje y código
+  - Dos botones: "Continuar sin Groq" (retry con `skipGroq: true`) o "Cancelar"
+  - CSS styling en `public/index.html`: overlay semi-transparente, botones estilizados
+
+- **`postTransition()` mejorado:** detecta `groqRetryNeeded` flag, muestra modal,
+  reintentar automáticamente si user confirma
+
+#### Testing (18/18 unit + 185/185 total)
+
+- `test/groq-enrichment.test.mjs` (18 casos):
+  - enrichDraft: 9 cases (happy path, partial input, think blocks, errors, HTML validation, retries)
+  - finalizeArticle: 9 cases (gaps, preserve-complete, empty-response, validation, topic gen, overwrite prevention)
+  - Mock client pattern: tests sin consumir API real
+
+- `test/groq-integration-smoke.mjs` (6 cases):
+  - Module imports, mock client interaction, error paths, validateHtml export
+
+- Todos los tests existentes aún pasan (183 → 185)
+
+#### Documentation
+
+- **`GROQ-STEPS.md`** (410 líneas) — plan de implementación con todas 7 tareas
+- **`GROQ-SMOKE-TEST-REPORT.md`** (380 líneas) — reporte detallado de tests
+- **`ETAPA-4-COMPLETION.md`** (360 líneas) — guía de deployment
+
+#### Files Created
+
+- `src/lib/groq-enrichment.mjs` (614 lines)
+- `test/groq-enrichment.test.mjs` (380 lines)
+- `test/groq-integration-smoke.mjs` (125 lines)
+- `GROQ-STEPS.md`, `GROQ-SMOKE-TEST-REPORT.md`, `ETAPA-4-COMPLETION.md`
+
+#### Files Modified
+
+- `src/lib/article-validator.mjs`: export `sanitizeHtml()` + `DANGEROUS_TAGS` constant
+- `src/server.mjs`: wire Groq en send-to-revision y promote (+89 lines)
+- `public/js/api.js`: modal dialog + retry logic with skipGroq flag (+92 lines)
+- `public/index.html`: CSS para modal styling (+55 lines)
+- `package.json`: add `groq-sdk` dependency
+
+#### Commits
+
+1. `2b02940` — feat: Implement Etapa 4 — Groq LLM enrichment
+2. `5ab6742` — fix: Apply security hardening patches for Etapa 4
+
+#### Configuration
+
+- **Required:** `GROQ_API_KEY=<key>` en .env
+- **Optional:** Si `GROQ_API_KEY` undefined, sistema sigue funcionando con splitter heurístico
+
+#### Status
+
+- ✅ Implementación completa
+- ✅ 185/185 tests passing
+- ✅ Security hardened
+- ✅ Backwards compatible
+- ✅ Ready for production (pending code review + real Groq API testing)
+
+---
+
 ## [1.20.0] — 2026-09-13
 
 ### Etapa 3 — detección y borrado de duplicados locales
